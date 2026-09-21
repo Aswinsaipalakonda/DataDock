@@ -104,7 +104,8 @@ export async function getStudentBookmarks(
       const { data: moreMats } = await supabase
         .from("materials")
         .select("id, title, type, subject, subjects(title, code), users(name)")
-        .in("id", missingIds);
+        .in("id", missingIds)
+        .neq("state", "deleted");
 
       (moreMats || []).forEach((m: any) => {
         cookieBookmarks.push({

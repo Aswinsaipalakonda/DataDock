@@ -27,6 +27,7 @@ class MySQLQueryBuilder {
   private tableName: string;
   private selectedCols: string = '*';
   private countMode: string | null = null;
+  private isHead: boolean = false;
   private filters: QueryFilter[] = [];
   private orderClauses: string[] = [];
   private limitCount: number | null = null;
@@ -44,6 +45,9 @@ class MySQLQueryBuilder {
     this.selectedCols = columns;
     if (options?.count) {
       this.countMode = options.count;
+    }
+    if (options?.head) {
+      this.isHead = true;
     }
     return this;
   }
@@ -319,11 +323,11 @@ class MySQLQueryBuilder {
       this.buildWhere(whereParts, params);
       const whereSql = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
-      // Count only check
-      if (this.countMode && this.selectedCols.includes('count')) {
+      // Count only check (head request or explicit count request)
+      if (this.isHead || (this.countMode && this.selectedCols.includes('count'))) {
         const countSql = `SELECT COUNT(*) as total FROM \`${this.tableName}\` ${whereSql}`;
         const [countResult]: any = await pool.query(countSql, params);
-        return { data: null, count: countResult[0]?.total || 0, error: null };
+        return { data: null, count: Number(countResult[0]?.total || 0), error: null };
       }
 
       // Base select
@@ -344,6 +348,13 @@ class MySQLQueryBuilder {
       let limitSql = '';
       if (this.limitCount) {
         limitSql = `LIMIT ${this.limitCount}`;
+      }
+
+      let totalCount: number | null = null;
+      if (this.countMode) {
+        const countSql = `SELECT COUNT(*) as total FROM \`${this.tableName}\` ${whereSql}`;
+        const [countResult]: any = await pool.query(countSql, params);
+        totalCount = Number(countResult[0]?.total || 0);
       }
 
       const sql = `SELECT ${selectClause} FROM \`${this.tableName}\` ${whereSql} ${orderSql} ${limitSql}`.trim();
@@ -414,7 +425,7 @@ class MySQLQueryBuilder {
         const matIds = [...new Set(rows.map((r: any) => r.material_id).filter(Boolean))];
         if (matIds.length) {
           const [materials]: any = await pool.query(
-            'SELECT id, title, description, type, subject, branch, semester, regulation, owner_id FROM materials WHERE id IN (?)',
+            "SELECT id, title, description, type, subject, branch, semester, regulation, owner_id FROM materials WHERE id IN (?) AND (state != 'deleted' OR state IS NULL)",
             [matIds]
           );
 
@@ -480,10 +491,10 @@ class MySQLQueryBuilder {
       }
 
       if (this.isMaybeSingle) {
-        return { data: rows.length ? rows[0] : null, count: rows.length, error: null };
+        return { data: rows.length ? rows[0] : null, count: totalCount ?? rows.length, error: null };
       }
 
-      return { data: rows, count: rows.length, error: null };
+      return { data: rows, count: totalCount ?? rows.length, error: null };
     } catch (err: any) {
       console.error(`MySQLQueryBuilder error on [${this.tableName}]:`, err.message);
       return { data: null, count: null, error: { message: err.message, code: err.code } };
@@ -506,8 +517,13 @@ class MySQLQueryBuilder {
         whereParts.push(`\`${colName}\` = ?`);
         params.push(f.value);
       } else if (f.type === 'neq') {
-        whereParts.push(`\`${colName}\` != ?`);
-        params.push(f.value);
+        if (colName === 'state' && f.value === 'deleted') {
+          whereParts.push(`(\`${colName}\` != ? OR \`${colName}\` IS NULL)`);
+          params.push(f.value);
+        } else {
+          whereParts.push(`\`${colName}\` != ?`);
+          params.push(f.value);
+        }
       } else if (f.type === 'in') {
         if (Array.isArray(f.value) && f.value.length) {
           whereParts.push(`\`${colName}\` IN (?)`);

@@ -40,6 +40,9 @@ const FALLBACK_STUDENT_MATERIALS: Record<number, MaterialItem[]> = {};
 
 const FALLBACK_ANNOUNCEMENTS: any[] = [];
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function StudentDashboard({
   searchParams,
 }: {

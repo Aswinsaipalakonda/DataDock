@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { logAuditAction } from "@/utils/audit-logger";
 import { ALLOWED_EXTENSIONS } from "@/lib/file-constants";
 
@@ -184,6 +185,13 @@ export async function uploadMaterialAction(formData: FormData) {
       filesCount: validFiles.length 
     });
   }
+
+  revalidatePath("/faculty/materials");
+  revalidatePath("/faculty");
+  revalidatePath("/admin");
+  revalidatePath("/admin/analytics");
+  revalidatePath("/student");
+  revalidatePath("/student/subjects");
 
   redirect("/faculty/materials");
 }

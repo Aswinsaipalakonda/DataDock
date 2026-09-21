@@ -24,6 +24,9 @@ interface MaterialFileItem {
   storage_ref: string;
 }
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function MaterialDetailsPage(props: PageProps) {
   const params = await props.params;
   const id = params.id;
@@ -102,7 +105,7 @@ export default async function MaterialDetailsPage(props: PageProps) {
     ? `← Back to ${material.subject}` 
     : "← Back to Subjects";
 
-  if (!material) {
+  if (!material || material.state === "deleted" || (!isFaculty && !isAdmin && material.state !== "published")) {
     return (
       <div className="p-4 sm:p-8 max-w-xl mx-auto space-y-4">
         <Link 

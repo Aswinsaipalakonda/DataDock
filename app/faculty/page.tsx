@@ -36,6 +36,9 @@ const FALLBACK_FACULTY_MATERIALS: MaterialWithFiles[] = [];
 
 const FALLBACK_FACULTY_ANNOUNCEMENTS: any[] = [];
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function FacultyDashboardPage() {
   const cookieStore = await cookies();
   const { user, profile, supabase } = await getCachedUserProfile();

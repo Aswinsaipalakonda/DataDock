@@ -5,6 +5,18 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { ALLOWED_EXTENSIONS } from "@/lib/file-constants";
 
+function revalidateMaterialCaches(materialId?: string) {
+  revalidatePath("/faculty/materials");
+  revalidatePath("/faculty");
+  revalidatePath("/admin");
+  revalidatePath("/admin/analytics");
+  revalidatePath("/student");
+  revalidatePath("/student/subjects");
+  if (materialId) {
+    revalidatePath(`/student/materials/${materialId}`);
+  }
+}
+
 // Archive or Publish a Material
 export async function toggleMaterialState(id: string, newState: "draft" | "published" | "archived") {
   const cookieStore = await cookies();
@@ -21,7 +33,7 @@ export async function toggleMaterialState(id: string, newState: "draft" | "publi
 
   if (error) return { error: error.message };
 
-  revalidatePath("/faculty/materials");
+  revalidateMaterialCaches(id);
   return { success: true };
 }
 
@@ -41,7 +53,7 @@ export async function deleteMaterial(id: string) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/faculty/materials");
+  revalidateMaterialCaches(id);
   return { success: true };
 }
 
@@ -63,7 +75,7 @@ export async function bulkToggleMaterialState(ids: string[], newState: "draft" |
 
   if (error) return { error: error.message };
 
-  revalidatePath("/faculty/materials");
+  revalidateMaterialCaches();
   return { success: true };
 }
 
@@ -85,7 +97,7 @@ export async function bulkDeleteMaterials(ids: string[]) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/faculty/materials");
+  revalidateMaterialCaches();
   return { success: true };
 }
 
@@ -120,8 +132,7 @@ export async function updateMaterialDetails(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/faculty/materials");
-  revalidatePath(`/student/materials/${materialId}`);
+  revalidateMaterialCaches(materialId);
   return { success: true };
 }
 
@@ -184,8 +195,7 @@ export async function attachFileToMaterial(formData: FormData) {
     return { error: `Failed to register file: ${fileInsertError.message}` };
   }
 
-  revalidatePath("/faculty/materials");
-  revalidatePath(`/student/materials/${materialId}`);
+  revalidateMaterialCaches(materialId);
   return { success: true };
 }
 
@@ -261,8 +271,7 @@ export async function replaceFileVersion(formData: FormData) {
     return { error: `Failed to register version ${nextVersion}: ${fileInsertError.message}` };
   }
 
-  revalidatePath("/faculty/materials");
-  revalidatePath(`/student/materials/${materialId}`);
+  revalidateMaterialCaches(materialId);
   return { success: true };
 }
 

@@ -49,6 +49,9 @@ const DEFAULT_SUBJECTS: SubjectItem[] = [];
 
 const FALLBACK_FACULTY_INVENTORY: RawMaterial[] = [];
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function FacultyMaterialsPage() {
   const cookieStore = await cookies();
   const { user, supabase } = await getCachedUserProfile();

@@ -9,6 +9,9 @@ interface PageProps {
   searchParams: Promise<{ q?: string; type?: string }>;
 }
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function SubjectDetailPage(props: PageProps) {
   const params = await props.params;
   const searchParams = await props.searchParams;

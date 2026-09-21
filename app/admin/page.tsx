@@ -52,6 +52,9 @@ function formatActionTitle(action: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AdminDashboardPage() {
   const { user, supabase } = await getCachedUserProfile();
   if (!user) redirect("/login");
@@ -61,15 +64,13 @@ export default async function AdminDashboardPage() {
     studentsRes,
     facultyRes,
     materialsRes,
-    filesRes,
     eventsRes,
     branchesRes,
     inquiriesRes
   ] = await Promise.all([
     supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "student"),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "faculty"),
-    supabase.from("materials").select("id", { count: "exact", head: true }),
-    supabase.from("material_files").select("size"),
+    supabase.from("materials").select("id", { count: "exact", head: true }).neq("state", "deleted"),
     supabase.from("audit_logs").select(`
       id,
       action,
@@ -98,20 +99,6 @@ export default async function AdminDashboardPage() {
   const totalFaculty = rawFaculty;
   const totalMaterials = rawMaterials;
   const totalBranches = rawBranches;
-
-  // Calculate storage consumed
-  let totalStorageBytes = 0;
-  if (filesRes.data && filesRes.data.length > 0) {
-    (filesRes.data as Array<{ size: number }>).forEach((f) => {
-      totalStorageBytes += f.size || 0;
-    });
-  }
-
-  const formatStorage = (bytes: number) => {
-    const mb = bytes / (1024 * 1024);
-    if (mb < 1024) return mb.toFixed(2) + " MB";
-    return (mb / 1024).toFixed(2) + " GB";
-  };
 
   const rawEvents: ActivityEvent[] = ((eventsRes.data || []) as Record<string, unknown>[]).map((ev: any) => {
     const userObj = ev.users as { email?: string; name?: string; role?: string } | null;
@@ -215,7 +202,9 @@ export default async function AdminDashboardPage() {
           </div>
           <div>
             <span className="block text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{totalMaterials}</span>
-            <span className="text-[11px] sm:text-xs text-slate-500 font-normal mt-0.5 block">Learning Units</span>
+            <span className="text-[11px] sm:text-xs text-slate-500 font-normal mt-0.5 block">
+              {totalMaterials === 1 ? "Learning Unit" : "Learning Units"}
+            </span>
           </div>
         </div>
 

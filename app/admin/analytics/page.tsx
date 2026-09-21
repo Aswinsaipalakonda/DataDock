@@ -74,6 +74,9 @@ export interface StudentEngagementLog {
   timestamp: string;
 }
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AdminAnalyticsPage() {
   const cookieStore = await cookies();
   const { user, supabase } = await getCachedUserProfile();
