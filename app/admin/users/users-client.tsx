@@ -8,7 +8,8 @@ import {
   batchCreateUsersAction, 
   toggleUserStatus, 
   adminResetUserPassword, 
-  bulkPromoteStudentsSemesterAction 
+  bulkPromoteStudentsSemesterAction,
+  bulkDeleteStudentsAction
 } from "./actions";
 import { ToastContainer, ToastMessage } from "@/components/toast";
 import { 
@@ -35,7 +36,8 @@ import {
   ShieldCheck,
   Layers,
   Sparkles,
-  Copy
+  Copy,
+  UserMinus
 } from "lucide-react";
 
 export interface BranchOption {
@@ -161,6 +163,15 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
   const [promoteBranch, setPromoteBranch] = useState("ALL");
   const [isPromoting, setIsPromoting] = useState(false);
 
+  // Academic Year-End Cleanup State
+  const [isCleanupMode, setIsCleanupMode] = useState(false);
+  const [cleanupSemester, setCleanupSemester] = useState<number>(7);
+  const [cleanupBranch, setCleanupBranch] = useState<string>("ALL");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteModalMounted, setIsBulkDeleteModalMounted] = useState(false);
+  const [isBulkDeleteModalVisible, setIsBulkDeleteModalVisible] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
   // Status Toggling State
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -225,6 +236,23 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
     });
     return map;
   }, [eligiblePromoteStudents]);
+
+  // Target students eligible for Year-End Cleanup based on semester & branch
+  const eligibleCleanupStudents = useMemo(() => {
+    return users.filter((u) => {
+      if (u.role !== "student") return false;
+      if (u.current_semester !== cleanupSemester) return false;
+      if (cleanupBranch !== "ALL" && u.branch !== cleanupBranch) return false;
+      return true;
+    });
+  }, [users, cleanupSemester, cleanupBranch]);
+
+  const cleanupTotalCount = eligibleCleanupStudents.length;
+  const cleanupSelectedCount = eligibleCleanupStudents.filter((s) => selectedStudentIds.has(s.id)).length;
+  const cleanupRetainedCount = cleanupTotalCount - cleanupSelectedCount;
+  const deselectedBacklogStudents = useMemo(() => {
+    return eligibleCleanupStudents.filter((s) => !selectedStudentIds.has(s.id));
+  }, [eligibleCleanupStudents, selectedStudentIds]);
 
   // Duplicate Check for roll number
   const isDuplicateRollNumber = useMemo(() => {
@@ -766,11 +794,121 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
     }
   };
 
+  // Academic Year-End Cleanup Handlers
+  const startCleanupMode = () => {
+    setIsCleanupMode(true);
+    setActiveTab("student");
+    const studentSemesters = users
+      .filter((u) => u.role === "student" && u.current_semester)
+      .map((u) => u.current_semester as number);
+    const targetSem = studentSemesters.length > 0 ? Math.max(...studentSemesters) : 7;
+    setCleanupSemester(targetSem);
+    setCleanupBranch("ALL");
+    setSemesterFilter(String(targetSem));
+    setBranchFilter("all");
+    setCurrentPage(1);
+
+    const initialSelected = users.filter(
+      (u) => u.role === "student" && u.current_semester === targetSem
+    );
+    setSelectedStudentIds(new Set(initialSelected.map((s) => s.id)));
+  };
+
+  const exitCleanupMode = () => {
+    setIsCleanupMode(false);
+    setSelectedStudentIds(new Set());
+    setSemesterFilter("all");
+    setBranchFilter("all");
+  };
+
+  const handleCleanupSemesterChange = (sem: number) => {
+    setCleanupSemester(sem);
+    setSemesterFilter(String(sem));
+    setCurrentPage(1);
+    const targetStudents = users.filter(
+      (u) => u.role === "student" && u.current_semester === sem && (cleanupBranch === "ALL" || u.branch === cleanupBranch)
+    );
+    setSelectedStudentIds(new Set(targetStudents.map((s) => s.id)));
+  };
+
+  const handleCleanupBranchChange = (br: string) => {
+    setCleanupBranch(br);
+    setBranchFilter(br === "ALL" ? "all" : br);
+    setCurrentPage(1);
+    const targetStudents = users.filter(
+      (u) => u.role === "student" && u.current_semester === cleanupSemester && (br === "ALL" || u.branch === br)
+    );
+    setSelectedStudentIds(new Set(targetStudents.map((s) => s.id)));
+  };
+
+  const toggleStudentSelection = (studentId: string) => {
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) {
+        next.delete(studentId);
+      } else {
+        next.add(studentId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllEligible = () => {
+    setSelectedStudentIds(new Set(eligibleCleanupStudents.map((s) => s.id)));
+  };
+
+  const deselectAllEligible = () => {
+    setSelectedStudentIds(new Set());
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    if (cleanupSelectedCount === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const selectedIdsArray = Array.from(selectedStudentIds);
+      const res = await bulkDeleteStudentsAction(
+        selectedIdsArray,
+        cleanupSemester,
+        cleanupBranch
+      );
+
+      if (res.error) {
+        addToast("error", "Deletion Failed", res.error);
+      } else {
+        addToast(
+          "success",
+          "Cohort Cleanup Complete",
+          `Permanently deleted ${res.count || selectedIdsArray.length} students. Retained ${cleanupRetainedCount} students with backlogs.`
+        );
+        const deletedSet = new Set(selectedIdsArray);
+        setUsers((prev) => prev.filter((u) => !deletedSet.has(u.id)));
+        setSelectedStudentIds(new Set());
+        setIsBulkDeleteModalVisible(false);
+        setTimeout(() => {
+          setIsBulkDeleteModalMounted(false);
+          setIsCleanupMode(false);
+          setSemesterFilter("all");
+          setBranchFilter("all");
+        }, 300);
+      }
+    } catch {
+      addToast("error", "Error", "Failed to delete selected students.");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   // Filtered dataset
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      if (activeTab !== "all" && u.role !== activeTab) {
-        return false;
+      if (isCleanupMode) {
+        if (u.role !== "student") return false;
+        if (u.current_semester !== cleanupSemester) return false;
+        if (cleanupBranch !== "ALL" && u.branch !== cleanupBranch) return false;
+      } else {
+        if (activeTab !== "all" && u.role !== activeTab) {
+          return false;
+        }
       }
 
       const q = searchQuery.toLowerCase().trim();
@@ -787,29 +925,31 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
         }
       }
 
-      if (branchFilter !== "all" && u.branch !== branchFilter) {
-        return false;
-      }
+      if (!isCleanupMode) {
+        if (branchFilter !== "all" && u.branch !== branchFilter) {
+          return false;
+        }
 
-      if (semesterFilter !== "all" && String(u.current_semester) !== semesterFilter) {
-        return false;
-      }
+        if (semesterFilter !== "all" && String(u.current_semester) !== semesterFilter) {
+          return false;
+        }
 
-      if (sectionFilter !== "all" && u.section !== sectionFilter) {
-        return false;
-      }
+        if (sectionFilter !== "all" && u.section !== sectionFilter) {
+          return false;
+        }
 
-      if (designationFilter !== "all" && u.designation !== designationFilter) {
-        return false;
-      }
+        if (designationFilter !== "all" && u.designation !== designationFilter) {
+          return false;
+        }
 
-      if (statusFilter !== "all" && u.status !== statusFilter) {
-        return false;
+        if (statusFilter !== "all" && u.status !== statusFilter) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [users, activeTab, searchQuery, branchFilter, semesterFilter, sectionFilter, designationFilter, statusFilter]);
+  }, [users, isCleanupMode, cleanupSemester, cleanupBranch, activeTab, searchQuery, branchFilter, semesterFilter, sectionFilter, designationFilter, statusFilter]);
 
   // Paginated dataset
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
@@ -854,20 +994,40 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           {counts.student > 0 && (
-            <button
-              onClick={() => {
-                setIsPromoteModalMounted(true);
-                requestAnimationFrame(() => {
+            <>
+              <button
+                onClick={() => {
+                  setIsPromoteModalMounted(true);
                   requestAnimationFrame(() => {
-                    setIsPromoteModalVisible(true);
+                    requestAnimationFrame(() => {
+                      setIsPromoteModalVisible(true);
+                    });
                   });
-                });
-              }}
-              className="inline-flex items-center gap-2 px-4.5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-2xs"
-            >
-              <GraduationCap className="h-4 w-4 text-blue-600" />
-              <span>Promote Cohort</span>
-            </button>
+                }}
+                className="inline-flex items-center gap-2 px-4.5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-2xs"
+              >
+                <GraduationCap className="h-4 w-4 text-blue-600" />
+                <span>Promote Cohort</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (isCleanupMode) {
+                    exitCleanupMode();
+                  } else {
+                    startCleanupMode();
+                  }
+                }}
+                className={`inline-flex items-center gap-2 px-4.5 py-2.5 rounded-full border text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-2xs ${
+                  isCleanupMode
+                    ? "bg-rose-50 text-rose-800 border-rose-300 ring-2 ring-rose-400 font-semibold"
+                    : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
+                }`}
+              >
+                <UserMinus className="h-4 w-4 text-rose-600" />
+                <span>{isCleanupMode ? "Exit Cleanup" : "Year-End Cleanup"}</span>
+              </button>
+            </>
           )}
 
           <button
@@ -985,6 +1145,137 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           )}
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 2.5 YEAR-END ACADEMIC CLEANUP CONTROL BANNER */}
+      {/* ========================================================================= */}
+      {isCleanupMode && (
+        <div className="p-5 sm:p-6 rounded-3xl bg-linear-to-r from-rose-50/70 via-amber-50/50 to-white border border-rose-200/90 shadow-sm space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-700 shrink-0 mt-0.5">
+                <UserMinus className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                    Academic Year-End Cleanup Mode
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold uppercase tracking-wider border border-rose-200">
+                    Cohort Deletion
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                  Select the completed semester cohort. Checkboxes appear beside each student icon on the left. 
+                  <strong> Deselect students who have backlogs</strong> (manually or by searching their roll number) to preserve their portal access. 
+                  All remaining selected students will be permanently deleted and cannot access the portal again.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+              <button
+                onClick={exitCleanupMode}
+                className="px-4 py-2 rounded-full bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+              >
+                Exit Cleanup Mode
+              </button>
+              <button
+                onClick={() => {
+                  if (cleanupSelectedCount === 0) {
+                    addToast("error", "No Selection", "Please select at least one student to delete.");
+                    return;
+                  }
+                  setIsBulkDeleteModalMounted(true);
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      setIsBulkDeleteModalVisible(true);
+                    });
+                  });
+                }}
+                disabled={cleanupSelectedCount === 0}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer disabled:cursor-not-allowed"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Selected ({cleanupSelectedCount})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Cohort Selectors & Summary Metrics */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-3 border-t border-rose-200/60">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-700">Target Semester:</label>
+                <select
+                  value={cleanupSemester}
+                  onChange={(e) => handleCleanupSemesterChange(Number(e.target.value))}
+                  className="px-3.5 py-1.5 rounded-full bg-white border border-rose-300 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+                >
+                  {semesters.map((s) => (
+                    <option key={s.number} value={s.number}>
+                      Semester {s.number}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-700">Branch:</label>
+                <select
+                  value={cleanupBranch}
+                  onChange={(e) => handleCleanupBranchChange(e.target.value)}
+                  className="px-3.5 py-1.5 rounded-full bg-white border border-rose-300 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+                >
+                  <option value="ALL">All Branches (CIC, CSD, CSM)</option>
+                  {branches.map((b) => (
+                    <option key={b.code} value={b.code}>
+                      {b.code} - {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="h-4 w-px bg-rose-200 hidden sm:block" />
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={selectAllEligible}
+                  className="px-3 py-1 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-900 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Select All ({cleanupTotalCount})
+                </button>
+                <button
+                  onClick={deselectAllEligible}
+                  className="px-3 py-1 rounded-full bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+
+            {/* Cohort Stats Pills */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 text-xs text-slate-700">
+                <span>Cohort Total:</span>
+                <strong className="text-slate-900">{cleanupTotalCount}</strong>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100/80 border border-rose-300 text-xs text-rose-900">
+                <span className="w-2 h-2 rounded-full bg-rose-600" />
+                <span>To Delete:</span>
+                <strong className="text-rose-900 font-bold">{cleanupSelectedCount}</strong>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/80 border border-amber-300 text-xs text-amber-900">
+                <span className="w-2 h-2 rounded-full bg-amber-600" />
+                <span>Retaining (Backlogs):</span>
+                <strong className="text-amber-900 font-bold">{cleanupRetainedCount}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. FILTERS & SEARCH TOOLBAR */}
@@ -1151,7 +1442,37 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3.5 px-5">User & Contact</th>
+                    <th className="py-3.5 px-5">
+                      <div className="flex items-center gap-3">
+                        {isCleanupMode && (
+                          <input
+                            type="checkbox"
+                            checked={
+                              paginatedUsers.length > 0 &&
+                              paginatedUsers.every((u) => selectedStudentIds.has(u.id))
+                            }
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedStudentIds((prev) => {
+                                  const next = new Set(prev);
+                                  paginatedUsers.forEach((u) => next.add(u.id));
+                                  return next;
+                                });
+                              } else {
+                                setSelectedStudentIds((prev) => {
+                                  const next = new Set(prev);
+                                  paginatedUsers.forEach((u) => next.delete(u.id));
+                                  return next;
+                                });
+                              }
+                            }}
+                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer shrink-0"
+                            title="Toggle page selection"
+                          />
+                        )}
+                        <span>User & Contact</span>
+                      </div>
+                    </th>
                     <th className="py-3.5 px-4">Role & Designation</th>
                     <th className="py-3.5 px-4">Department / Scope</th>
                     <th className="py-3.5 px-4">Identifier / Phone</th>
@@ -1186,17 +1507,50 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                         : "bg-blue-600 text-white";
 
                     return (
-                      <tr key={u.id} className="hover:bg-slate-50/60 transition-colors group">
+                      <tr 
+                        key={u.id} 
+                        className={`transition-colors group ${
+                          isCleanupMode && u.role === "student"
+                            ? selectedStudentIds.has(u.id)
+                              ? "bg-rose-50/25 hover:bg-rose-50/40"
+                              : "bg-amber-50/25 hover:bg-amber-50/40"
+                            : "hover:bg-slate-50/60"
+                        }`}
+                      >
                         {/* 1. Name & Email */}
                         <td className="py-3.5 px-5">
                           <div className="flex items-center gap-3">
+                            {/* Checkbox beside student icon on the left side */}
+                            {isCleanupMode && u.role === "student" && (
+                              <input
+                                type="checkbox"
+                                checked={selectedStudentIds.has(u.id)}
+                                onChange={() => toggleStudentSelection(u.id)}
+                                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer shrink-0 transition-transform active:scale-90"
+                                aria-label={`Select ${u.name} for graduation deletion`}
+                              />
+                            )}
                             <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${avatarStyle}`}>
                               {initials}
                             </div>
                             <div className="min-w-0">
-                              <span className="font-bold text-slate-900 block truncate leading-snug">
-                                {u.name}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 block truncate leading-snug">
+                                  {u.name}
+                                </span>
+                                {isCleanupMode && u.role === "student" && (
+                                  !selectedStudentIds.has(u.id) ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                      Retained (Backlog)
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+                                      Marked for Deletion
+                                    </span>
+                                  )
+                                )}
+                              </div>
                               <span className="text-slate-500 text-xs block truncate font-normal">
                                 {u.email}
                               </span>
@@ -1316,6 +1670,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                   <option value={10}>10</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
+                  <option value={100}>100</option>
                 </select>
                 <span>of <strong>{filteredUsers.length}</strong> total records</span>
               </div>
@@ -2160,7 +2515,109 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
       )}
 
       {/* ========================================================================= */}
-      {/* 8. DELETE USER CONFIRMATION MODAL */}
+      {/* 8. BULK PERMANENT DELETION SAFETY MODAL (YEAR-END CLEANUP) */}
+      {/* ========================================================================= */}
+      {isBulkDeleteModalMounted && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            onClick={() => {
+              if (isBulkDeleting) return;
+              setIsBulkDeleteModalVisible(false);
+              setTimeout(() => setIsBulkDeleteModalMounted(false), 300);
+            }}
+            className={`fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-300 ${
+              isBulkDeleteModalVisible ? "opacity-100" : "opacity-0"
+            }`}
+          />
+
+          <div
+            data-lenis-prevent
+            className={`relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 z-10 overflow-hidden p-6 sm:p-7 space-y-5 transition-all duration-300 transform ${
+              isBulkDeleteModalVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+            }`}
+          >
+            <div className="space-y-1.5">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 mb-2">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">
+                Confirm Permanent Cohort Deletion
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                You are about to permanently delete <strong>{cleanupSelectedCount} students</strong> from <strong>Semester {cleanupSemester}</strong> ({cleanupBranch === "ALL" ? "All Branches" : cleanupBranch}).
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 space-y-2">
+              <div className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                <span>Irreversible Action & Access Revocation</span>
+              </div>
+              <p className="leading-relaxed">
+                Deleted student accounts will be purged from the database and authentication systems. 
+                They will <strong>NOT</strong> be able to log in or access the portal again.
+              </p>
+            </div>
+
+            {cleanupRetainedCount > 0 && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2 max-h-44 overflow-y-auto">
+                <div className="font-bold flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Check className="h-4 w-4 text-amber-700 shrink-0" />
+                    <span>{cleanupRetainedCount} Backlog Students Retaining Portal Access</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-amber-700 uppercase bg-amber-100 px-2 py-0.5 rounded-full">Untouched</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  These deselected students will remain completely active with uninterrupted access to their student portal:
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {deselectedBacklogStudents.map((s) => (
+                    <span key={s.id} className="inline-flex items-center px-2 py-0.5 rounded-md bg-white border border-amber-300 font-mono text-[10px] text-amber-900">
+                      {s.roll_number || s.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBulkDeleteModalVisible(false);
+                  setTimeout(() => setIsBulkDeleteModalMounted(false), 300);
+                }}
+                disabled={isBulkDeleting}
+                className="px-5 py-2.5 rounded-full border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDeleteConfirm}
+                disabled={isBulkDeleting || cleanupSelectedCount === 0}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Deleting {cleanupSelectedCount} Students...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    <span>Permanently Delete ({cleanupSelectedCount})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 9. DELETE USER CONFIRMATION MODAL */}
       {/* ========================================================================= */}
       {deletingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

@@ -569,3 +569,79 @@ export async function bulkPromoteStudentsSemesterAction(
   revalidatePath("/student/subjects");
   return { success: true };
 }
+
+// Bulk permanently delete students (Academic Year-End Cleanup)
+export async function bulkDeleteStudentsAction(
+  userIds: string[],
+  semester: number,
+  branch?: string
+) {
+  if (!userIds || userIds.length === 0) {
+    return { error: "No students selected for deletion." };
+  }
+
+  const cookieStore = await cookies();
+  const adminClient = createServerClient(cookieStore);
+
+  const { data: { user: adminUser } } = await adminClient.auth.getUser();
+  if (!adminUser) return { error: "Unauthorized" };
+
+  const { data: adminProfile } = await adminClient
+    .from("users")
+    .select("role")
+    .eq("id", adminUser.id)
+    .single();
+
+  if (!adminProfile || adminProfile.role !== "admin") {
+    return { error: "Permission denied." };
+  }
+
+  // Never allow deleting the administrator
+  const sanitizedUserIds = userIds.filter((id) => id !== adminUser.id);
+  if (sanitizedUserIds.length === 0) {
+    return { error: "Cannot delete administrator accounts." };
+  }
+
+  // 1. Delete user profiles from users table in batches
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < sanitizedUserIds.length; i += CHUNK_SIZE) {
+    const chunk = sanitizedUserIds.slice(i, i + CHUNK_SIZE);
+    const { error: dbDeleteError } = await adminClient
+      .from("users")
+      .delete()
+      .in("id", chunk);
+
+    if (dbDeleteError) {
+      console.error("Batch delete users error:", dbDeleteError);
+      return { error: `Batch delete failed: ${dbDeleteError.message}` };
+    }
+  }
+
+  // 2. Delete authentication records so portal access is permanently revoked
+  const { client: adminAuthClient, hasServiceKey } = createAdminClient();
+  if (hasServiceKey) {
+    await Promise.allSettled(
+      sanitizedUserIds.map((id) => adminAuthClient.auth.admin.deleteUser(id))
+    );
+  }
+
+  await logAuditAction(
+    "YEAR_END_COHORT_BULK_DELETE",
+    `Sem ${semester} (${branch || "ALL"})`,
+    null,
+    {
+      deletedCount: sanitizedUserIds.length,
+      semester,
+      branch: branch || "ALL",
+      deletedIds: sanitizedUserIds,
+    }
+  );
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/analytics");
+  revalidatePath("/student");
+  revalidatePath("/student/subjects");
+
+  return { success: true, count: sanitizedUserIds.length };
+}
+
