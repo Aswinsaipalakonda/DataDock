@@ -277,6 +277,7 @@ export async function updateSubjectAction(
     semester: number;
     regulation?: string;
     active: boolean;
+    originalBranches?: string[];
   }
 ) {
   const cookieStore = await cookies();
@@ -325,13 +326,19 @@ export async function updateSubjectAction(
 
     if (error) return { error: error.message };
   } else {
-    // Delete old record
-    await supabase
-      .from("subjects")
-      .delete()
-      .eq("code", originalCode)
-      .eq("branch", originalBranch)
-      .eq("regulation", originalRegulation || "R23");
+    // Delete old records across original branches
+    const oldBranches = updates.originalBranches && updates.originalBranches.length > 0
+      ? updates.originalBranches
+      : [originalBranch];
+
+    for (const ob of oldBranches) {
+      await supabase
+        .from("subjects")
+        .delete()
+        .eq("code", originalCode)
+        .eq("branch", ob)
+        .eq("regulation", originalRegulation || "R23");
+    }
 
     // Upsert new branch records
     for (const b of branchList) {
@@ -355,8 +362,13 @@ export async function updateSubjectAction(
   return { success: true };
 }
 
-// Delete a subject
+// Delete a subject (single branch)
 export async function deleteSubjectAction(code: string, branch: string, regulation: string = "R23") {
+  return deleteSubjectGroupAction(code, [branch], regulation);
+}
+
+// Delete a subject across multiple branches (Grouped)
+export async function deleteSubjectGroupAction(code: string, branches: string[], regulation: string = "R23") {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
 
@@ -373,41 +385,62 @@ export async function deleteSubjectAction(code: string, branch: string, regulati
     return { error: "Permission denied." };
   }
 
-  const { error } = await supabase
-    .from("subjects")
-    .delete()
-    .eq("code", code)
-    .eq("branch", branch)
-    .eq("regulation", regulation);
+  for (const b of branches) {
+    await supabase
+      .from("subjects")
+      .delete()
+      .eq("code", code)
+      .eq("branch", b)
+      .eq("regulation", regulation);
+  }
 
-  if (error) return { error: error.message };
-
-  await logAuditAction("DELETE_SUBJECT", code, { branch, regulation }, null);
+  await logAuditAction("DELETE_SUBJECT_GROUP", code, { branches, regulation }, null);
 
   revalidatePath("/admin/taxonomy");
+  revalidatePath("/student/subjects");
+  revalidatePath("/faculty/upload");
+  revalidatePath("/faculty/materials");
   return { success: true };
 }
 
-// Toggle subject active status
+// Toggle subject active status (single branch)
 export async function toggleSubjectActiveAction(code: string, branch: string, regulation: string, currentActive: boolean) {
+  return toggleSubjectGroupActiveAction(code, [branch], regulation, currentActive);
+}
+
+// Toggle subject active status across multiple branches (Grouped)
+export async function toggleSubjectGroupActiveAction(code: string, branches: string[], regulation: string, currentActive: boolean) {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
-  const { error } = await supabase
-    .from("subjects")
-    .update({ active: !currentActive })
-    .eq("code", code)
-    .eq("branch", branch)
-    .eq("regulation", regulation || "R23");
+  const { data: profile } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
 
-  if (error) return { error: error.message };
+  if (!profile || profile.role !== "admin") {
+    return { error: "Permission denied." };
+  }
 
-  await logAuditAction("TOGGLE_SUBJECT_STATUS", code, { active: currentActive, branch, regulation }, { active: !currentActive, branch, regulation });
+  for (const b of branches) {
+    await supabase
+      .from("subjects")
+      .update({ active: !currentActive })
+      .eq("code", code)
+      .eq("branch", b)
+      .eq("regulation", regulation || "R23");
+  }
+
+  await logAuditAction("TOGGLE_SUBJECT_GROUP_STATUS", code, { active: currentActive, branches, regulation }, { active: !currentActive, branches, regulation });
 
   revalidatePath("/admin/taxonomy");
+  revalidatePath("/student/subjects");
+  revalidatePath("/faculty/upload");
+  revalidatePath("/faculty/materials");
   return { success: true };
 }
 

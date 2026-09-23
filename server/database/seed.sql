@@ -37,7 +37,8 @@ INSERT INTO `regulations` (`code`, `name`, `active`) VALUES
   ('A2', 'A2 Autonomous Regulation', 1),
   ('R19', 'R19 Autonomous Regulation', 1),
   ('R20', 'R20 Autonomous Regulation', 1),
-  ('R23', 'R23 Autonomous Regulation', 1)
+  ('R23', 'R23 Autonomous Regulation', 1),
+  ('R24', 'R24 Autonomous Regulation', 1)
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `active` = 1;
 
 -- 4. Subjects (213 Records)
@@ -256,6 +257,61 @@ INSERT INTO `subjects` (`code`, `title`, `branch`, `semester`, `regulation`, `ac
   ('R23MSCSTXX5', 'HON-5(MOOCS/Self-Study)', 'CSM', 8, 'R23', 1),
   ('R23MSCSTXX6', 'HON-6(MOOCS/Self-Study)', 'CSM', 8, 'R23', 1)
 ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `active` = VALUES(`active`);
+
+-- 4b. R24 Curriculum Subjects (51 Records: Semesters 3 & 5)
+INSERT INTO `subjects` (`code`, `title`, `branch`, `semester`, `regulation`, `active`) VALUES
+  ('R24MBMCL001/R24MBMCL002/R24MIASL001', 'Computer Aided Geometric Design and Assembly Lab (EMC) / Financial Accounting Practice( FBA) / Sensor and Control Logic Practice(RSA)', 'CIC', 3, 'R24', 1),
+  ('R24MBMCT001/R24MFBAT001/ R24MRSMT001', 'Financial Management(EMC) / Managerial Economics and Financial Analysis(FBA) / Introduction to Robotics (RSA)', 'CIC', 3, 'R24', 1),
+  ('R24MBMCT002/R24MFBAT002/R24MIAST002', 'Leadership and Team Management(EMC) / Human Resources and organizational Behaviour (FBA) / Sensor, Actuators and Control Logic (RSA)', 'CIC', 3, 'R24', 1),
+  ('R24MSCSL003', 'Data Structures Lab', 'CIC', 3, 'R24', 1),
+  ('R24MSCSL004', 'OOP with C++ Lab', 'CIC', 3, 'R24', 1),
+  ('R24MSCST003', 'Data Structures', 'CIC', 3, 'R24', 1),
+  ('R24MSCST004', 'OOP with C++', 'CIC', 3, 'R24', 1),
+  ('R24MSCST005', 'Digital Logic Design', 'CIC', 3, 'R24', 1),
+  ('R24MSCST006', 'Principles of Programming Languages', 'CIC', 3, 'R24', 1),
+  ('R24MBMCL001/R24MBMCL002/R24MIASL001', 'Computer Aided Geometric Design and Assembly Lab (EMC) / Financial Accounting Practice( FBA) / Sensor and Control Logic Practice(RSA)', 'CSD', 3, 'R24', 1),
+  ('R24MBMCT001/R24MFBAT001/ R24MRSMT001', 'Financial Management(EMC) / Managerial Economics and Financial Analysis(FBA) / Introduction to Robotics (RSA)', 'CSD', 3, 'R24', 1),
+  ('R24MBMCT002/R24MFBAT002/R24MIAST002', 'Leadership and Team Management(EMC) / Human Resources and organizational Behaviour (FBA) / Sensor, Actuators and Control Logic (RSA)', 'CSD', 3, 'R24', 1),
+  ('R24MSCSL003', 'Data Structures Lab', 'CSD', 3, 'R24', 1),
+  ('R24MSCSL004', 'OOP with C++ Lab', 'CSD', 3, 'R24', 1),
+  ('R24MSCST003', 'Data Structures', 'CSD', 3, 'R24', 1),
+  ('R24MSCST004', 'OOP with C++', 'CSD', 3, 'R24', 1),
+  ('R24MSCST005', 'Digital Logic Design', 'CSD', 3, 'R24', 1),
+  ('R24MSCST006', 'Principles of Programming Languages', 'CSD', 3, 'R24', 1),
+  ('R24MBMCL001/R24MBMCL002/R24MIASL001', 'Computer Aided Geometric Design and Assembly Lab (EMC) / Financial Accounting Practice( FBA) / Sensor and Control Logic Practice(RSA)', 'CSM', 3, 'R24', 1),
+  ('R24MBMCT001/R24MFBAT001/ R24MRSMT001', 'Financial Management(EMC) / Managerial Economics and Financial Analysis(FBA) / Introduction to Robotics (RSA)', 'CSM', 3, 'R24', 1),
+  ('R24MBMCT002/R24MFBAT002/R24MIAST002', 'Leadership and Team Management(EMC) / Human Resources and organizational Behaviour (FBA) / Sensor, Actuators and Control Logic (RSA)', 'CSM', 3, 'R24', 1),
+  ('R24MSCSL003', 'Data Structures Lab', 'CSM', 3, 'R24', 1),
+  ('R24MSCSL004', 'OOP with C++ Lab', 'CSM', 3, 'R24', 1),
+  ('R24MSCST003', 'Data Structures', 'CSM', 3, 'R24', 1),
+  ('R24MSCST004', 'OOP with C++', 'CSM', 3, 'R24', 1),
+  ('R24MSCST005', 'Digital Logic Design', 'CSM', 3, 'R24', 1),
+  ('R24MSCST006', 'Principles of Programming Languages', 'CSM', 3, 'R24', 1),
+  ('R24MBMCL003', 'Digital Engineerinng Lab (BMC)', 'CIC', 5, 'R24', 1),
+  ('R24MBMCT005', 'Entrepreneurship (BMC)', 'CIC', 5, 'R24', 1),
+  ('R24MSCSL007', 'Advanced Java Programming Lab', 'CIC', 5, 'R24', 1),
+  ('R24MSCST011', 'Operating Systems', 'CIC', 5, 'R24', 1),
+  ('R24MSCST012', 'Advanced Java Programming', 'CIC', 5, 'R24', 1),
+  ('R24MSCST013', 'Automata and Compiler Design', 'CIC', 5, 'R24', 1),
+  ('R24MSCST014', 'Computer Networks', 'CIC', 5, 'R24', 1),
+  ('R24MSCST032', 'Cryptography and Information Security', 'CIC', 5, 'R24', 1),
+  ('R24MBMCL003 / R24MIACL003', 'Digital Engineerinng Lab (BMC)/ Virtual Instrumentation Lab ( IAC)', 'CSD', 5, 'R24', 1),
+  ('R24MBMCT005 / R24MIACT005', 'Entrepreneurship (BMC) / Industry 4.0 and IIOT (IAC)', 'CSD', 5, 'R24', 1),
+  ('R24MSCSL007', 'Advanced Java Programming Lab', 'CSD', 5, 'R24', 1),
+  ('R24MSCST011', 'Operating Systems', 'CSD', 5, 'R24', 1),
+  ('R24MSCST012', 'Advanced Java Programming', 'CSD', 5, 'R24', 1),
+  ('R24MSCST013', 'Automata and Compiler Design', 'CSD', 5, 'R24', 1),
+  ('R24MSCST014', 'Computer Networks', 'CSD', 5, 'R24', 1),
+  ('R24MSCST026', 'Statistical and Mathematical Foundation of Data Analytics', 'CSD', 5, 'R24', 1),
+  ('R24MBMCL003 / R24MIACL003', 'Digital Engineerinng Lab (BMC)/ Virtual Instrumentation Lab ( IAC)', 'CSM', 5, 'R24', 1),
+  ('R24MBMCT005 / R24MIACT005', 'Entrepreneurship (BMC) / Industry 4.0 and IIOT (IAC)', 'CSM', 5, 'R24', 1),
+  ('R24MSCSL007', 'Advanced Java Programming Lab', 'CSM', 5, 'R24', 1),
+  ('R24MSCST011', 'Operating Systems', 'CSM', 5, 'R24', 1),
+  ('R24MSCST012', 'Advanced Java Programming', 'CSM', 5, 'R24', 1),
+  ('R24MSCST013', 'Automata and Compiler Design', 'CSM', 5, 'R24', 1),
+  ('R24MSCST014', 'Computer Networks', 'CSM', 5, 'R24', 1),
+  ('R24MSCST019', 'Data Warehousing and Data Mining', 'CSM', 5, 'R24', 1)
+ON DUPLICATE KEY UPDATE `title` = VALUES(`title`), `semester` = VALUES(`semester`), `active` = 1;
 
 -- 5. Users (104 Records: 1 Admin, 33 Faculty, 70 Students)
 INSERT INTO `users` (`id`, `email`, `password_hash`, `name`, `role`, `status`, `branch`, `academic_year`, `current_semester`, `section`, `designation`, `phone`, `roll_number`, `first_login_pending`) VALUES

@@ -23,6 +23,7 @@ interface BranchOption {
 }
 
 const FALLBACK_REGULATIONS: RegulationOption[] = [
+  { code: "R24", name: "R24 Autonomous Regulation" },
   { code: "R23", name: "R23 Autonomous Regulation" },
   { code: "R20", name: "R20 Autonomous Regulation" },
   { code: "R19", name: "R19 Autonomous Regulation" },

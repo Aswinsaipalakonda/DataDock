@@ -7,6 +7,7 @@
     "server": "node server/index.js",
     "dev:all": "concurrently -k -n \"API,WEB\" -c \"cyan,magenta\" \"node server/index.js\" \"next dev\"",
     "db:init": "node server/database/init-db.js",
+    "db:import": "node server/database/import-curriculum-and-students.js",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

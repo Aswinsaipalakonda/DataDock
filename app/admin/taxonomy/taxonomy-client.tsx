@@ -5,7 +5,9 @@ import {
   createSubjectAction, 
   updateSubjectAction, 
   deleteSubjectAction, 
+  deleteSubjectGroupAction,
   toggleSubjectActiveAction, 
+  toggleSubjectGroupActiveAction,
   createBranchAction, 
   updateBranchAction,
   toggleBranchActiveAction,
@@ -66,6 +68,15 @@ interface Subject {
   active: boolean;
 }
 
+export interface GroupedSubject {
+  code: string;
+  title: string;
+  semester: number;
+  regulation: string;
+  branches: string[];
+  active: boolean;
+}
+
 interface TaxonomyClientProps {
   branches: Branch[];
   semesters: Semester[];
@@ -109,10 +120,10 @@ export default function TaxonomyClient({
   // Slide-over Right Drawer for Subject Creation & Editing
   const [isSubjectDrawerMounted, setIsSubjectDrawerMounted] = useState(false);
   const [isSubjectDrawerVisible, setIsSubjectDrawerVisible] = useState(false);
-  const [editingSubject, setEditingSubject] = useState<{ originalCode: string; originalBranch: string; originalRegulation: string } | null>(null);
+  const [editingSubject, setEditingSubject] = useState<{ originalCode: string; originalBranches: string[]; originalRegulation: string; originalBranch?: string } | null>(null);
 
   // Delete Subject Confirmation Modal
-  const [deletingSubject, setDeletingSubject] = useState<Subject | null>(null);
+  const [deletingSubject, setDeletingSubject] = useState<GroupedSubject | null>(null);
   const [isDeletingSubject, setIsDeletingSubject] = useState(false);
 
   // Modal for Branch Creation & Editing
@@ -215,16 +226,16 @@ export default function TaxonomyClient({
   };
 
   // Open Drawer in Edit Mode
-  const openEditSubjectDrawer = (subject: Subject) => {
+  const openEditSubjectDrawer = (subject: GroupedSubject) => {
     setEditingSubject({ 
       originalCode: subject.code, 
-      originalBranch: subject.branch,
+      originalBranches: subject.branches,
       originalRegulation: subject.regulation || "R23"
     });
     setSubCode(subject.code);
     setSubTitle(subject.title);
     setSubRegulation(subject.regulation || "R23");
-    setSubBranches([subject.branch]);
+    setSubBranches(subject.branches);
     setSubSemester(subject.semester.toString());
     setSubActive(subject.active);
     setIsBranchDropdownOpen(false);
@@ -334,25 +345,54 @@ export default function TaxonomyClient({
     }, 400);
   };
 
+  // Grouped Subjects (1 row per code + regulation + semester across all its branches)
+  const groupedSubjects = useMemo<GroupedSubject[]>(() => {
+    const map = new Map<string, GroupedSubject>();
+    for (const sub of subjects) {
+      const reg = sub.regulation || "R23";
+      const key = `${sub.code}___${reg}___${sub.semester}`;
+      const existing = map.get(key);
+      if (existing) {
+        if (!existing.branches.includes(sub.branch)) {
+          existing.branches.push(sub.branch);
+        }
+        existing.active = existing.active || sub.active;
+      } else {
+        map.set(key, {
+          code: sub.code,
+          title: sub.title,
+          semester: sub.semester,
+          regulation: reg,
+          branches: [sub.branch],
+          active: sub.active,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.semester !== b.semester) return a.semester - b.semester;
+      return a.code.localeCompare(b.code);
+    });
+  }, [subjects]);
+
   // Stats calculation
   const stats = useMemo(() => {
-    const totalSubjects = subjects.length;
-    const activeSubjects = subjects.filter((s) => s.active).length;
+    const totalSubjects = groupedSubjects.length;
+    const activeSubjects = groupedSubjects.filter((s) => s.active).length;
     const totalBranches = branches.length;
     const totalSemesters = initialSemesters.length;
     const totalRegulations = regulations.length;
     return { totalSubjects, activeSubjects, totalBranches, totalSemesters, totalRegulations };
-  }, [subjects, branches, initialSemesters, regulations]);
+  }, [groupedSubjects, branches, initialSemesters, regulations]);
 
   // Filtered Subjects
   const filteredSubjects = useMemo(() => {
-    return subjects.filter((s) => {
+    return groupedSubjects.filter((s) => {
       const matchesSearch =
         s.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesBranch = branchFilter === "all" ? true : s.branch === branchFilter;
+      const matchesBranch = branchFilter === "all" ? true : s.branches.includes(branchFilter);
       const matchesSemester = semesterFilter === "all" ? true : s.semester.toString() === semesterFilter;
-      const matchesRegulation = regulationFilter === "all" ? true : (s.regulation || "R23") === regulationFilter;
+      const matchesRegulation = regulationFilter === "all" ? true : s.regulation === regulationFilter;
       const matchesStatus =
         statusFilter === "all"
           ? true
@@ -362,7 +402,7 @@ export default function TaxonomyClient({
 
       return matchesSearch && matchesBranch && matchesSemester && matchesRegulation && matchesStatus;
     });
-  }, [subjects, searchQuery, branchFilter, semesterFilter, regulationFilter, statusFilter]);
+  }, [groupedSubjects, searchQuery, branchFilter, semesterFilter, regulationFilter, statusFilter]);
 
   // Paginated Subjects
   const totalPages = Math.max(1, Math.ceil(filteredSubjects.length / pageSize));
@@ -387,10 +427,14 @@ export default function TaxonomyClient({
 
     try {
       if (editingSubject) {
-        // UPDATE Subject
+        // UPDATE Subject across branches
+        const origBranches = editingSubject.originalBranches && editingSubject.originalBranches.length > 0
+          ? editingSubject.originalBranches
+          : [editingSubject.originalBranch || subBranches[0]];
+
         const result = await updateSubjectAction(
           editingSubject.originalCode,
-          editingSubject.originalBranch,
+          origBranches[0] || "",
           editingSubject.originalRegulation,
           {
             code: formattedCode,
@@ -399,6 +443,7 @@ export default function TaxonomyClient({
             semester: semNum,
             regulation: formattedReg,
             active: subActive,
+            originalBranches: origBranches,
           }
         );
 
@@ -421,7 +466,7 @@ export default function TaxonomyClient({
           setSubjects((prev) => [
             ...updatedRecords,
             ...prev.filter((s) => !(
-              (s.code === editingSubject.originalCode && s.branch === editingSubject.originalBranch && (s.regulation || "R23") === editingSubject.originalRegulation) ||
+              (s.code === editingSubject.originalCode && origBranches.includes(s.branch) && (s.regulation || "R23") === editingSubject.originalRegulation) ||
               (s.code === formattedCode && subBranches.includes(s.branch) && (s.regulation || "R23") === formattedReg)
             )),
           ]);
@@ -469,19 +514,19 @@ export default function TaxonomyClient({
     }
   };
 
-  // Delete Subject Handler
+  // Delete Subject Handler (across all its branches)
   const handleDeleteSubjectConfirm = async () => {
     if (!deletingSubject) return;
     setIsDeletingSubject(true);
 
     try {
-      const result = await deleteSubjectAction(deletingSubject.code, deletingSubject.branch, deletingSubject.regulation || "R23");
+      const result = await deleteSubjectGroupAction(deletingSubject.code, deletingSubject.branches, deletingSubject.regulation || "R23");
       if (result.error) {
         addToast("error", "Delete Failed", result.error);
       } else {
-        addToast("success", "Subject Deleted", `${deletingSubject.code} [${deletingSubject.branch}] was removed.`);
+        addToast("success", "Subject Deleted", `${deletingSubject.code} was removed across ${deletingSubject.branches.join(", ")}.`);
         setSubjects((prev) =>
-          prev.filter((s) => !(s.code === deletingSubject.code && s.branch === deletingSubject.branch && (s.regulation || "R23") === (deletingSubject.regulation || "R23")))
+          prev.filter((s) => !(s.code === deletingSubject.code && deletingSubject.branches.includes(s.branch) && (s.regulation || "R23") === (deletingSubject.regulation || "R23")))
         );
         setDeletingSubject(null);
       }
@@ -492,21 +537,24 @@ export default function TaxonomyClient({
     }
   };
 
-  // Toggle Subject Active
-  const handleToggleSubject = async (code: string, branch: string, regulation: string = "R23", currentActive: boolean) => {
-    const key = `${code}-${branch}-${regulation}`;
+  // Toggle Subject Active (across all its branches)
+  const handleToggleSubject = async (sub: GroupedSubject) => {
+    const key = `${sub.code}-${sub.regulation}`;
     setTogglingCode(key);
     try {
-      const res = await toggleSubjectActiveAction(code, branch, regulation, currentActive);
+      const res = await toggleSubjectGroupActiveAction(sub.code, sub.branches, sub.regulation, sub.active);
       if (res.error) {
         addToast("error", "Status Update Failed", res.error);
       } else {
+        const nextActive = !sub.active;
         setSubjects((prev) =>
           prev.map((s) =>
-            s.code === code && s.branch === branch && (s.regulation || "R23") === regulation ? { ...s, active: !currentActive } : s
+            s.code === sub.code && (s.regulation || "R23") === sub.regulation && sub.branches.includes(s.branch)
+              ? { ...s, active: nextActive }
+              : s
           )
         );
-        addToast("success", "Status Updated", `${code} is now ${!currentActive ? "Active" : "Inactive"}.`);
+        addToast("success", "Status Updated", `${sub.code} is now ${nextActive ? "Active" : "Inactive"}.`);
       }
     } catch {
       addToast("error", "Error", "Failed to update subject status.");
@@ -823,7 +871,7 @@ export default function TaxonomyClient({
       <div className="bg-surface p-4 sm:p-5 rounded-3xl border border-border shadow-xs space-y-4">
         <div className="flex flex-wrap items-center gap-2 border-b border-border/80 pb-3">
           {[
-            { id: "subjects", label: "Subjects Catalog", count: subjects.length, icon: BookOpen },
+            { id: "subjects", label: "Subjects Catalog", count: groupedSubjects.length, icon: BookOpen },
             { id: "regulations", label: "Academic Regulations", count: regulations.length, icon: Award },
             { id: "branches", label: "Department Branches", count: branches.length, icon: FolderPlus },
             { id: "semesters", label: "Semester Timelines", count: semesters.length, icon: Calendar },
@@ -974,7 +1022,7 @@ export default function TaxonomyClient({
                     <th className="py-3.5 pl-6 pr-4">Regulation</th>
                     <th className="py-3.5 px-4">Course Code</th>
                     <th className="py-3.5 px-4">Subject Title</th>
-                    <th className="py-3.5 px-4">Branch</th>
+                    <th className="py-3.5 px-4">Branches</th>
                     <th className="py-3.5 px-4">Semester</th>
                     <th className="py-3.5 px-4">Status</th>
                     <th className="py-3.5 pl-4 pr-6 text-right">Actions</th>
@@ -983,10 +1031,10 @@ export default function TaxonomyClient({
                 <tbody className="divide-y divide-border">
                   {paginatedSubjects.map((sub) => {
                     const reg = sub.regulation || "R23";
-                    const isToggling = togglingCode === `${sub.code}-${sub.branch}-${reg}`;
+                    const isToggling = togglingCode === `${sub.code}-${reg}`;
 
                     return (
-                      <tr key={`${sub.code}-${sub.branch}-${reg}`} className="hover:bg-bg/30 transition-colors group">
+                      <tr key={`${sub.code}-${reg}-${sub.semester}`} className="hover:bg-bg/30 transition-colors group">
                         {/* Regulation Badge */}
                         <td className="py-3.5 pl-6 pr-4">
                           <span className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-800 font-bold text-xs tracking-wide">
@@ -1006,11 +1054,18 @@ export default function TaxonomyClient({
                           {formatSubjectTitle(sub.title)}
                         </td>
 
-                        {/* Branch */}
+                        {/* Branches Pills */}
                         <td className="py-3.5 px-4">
-                          <span className="px-2.5 py-0.5 rounded-full bg-bg border border-border text-xs font-medium text-primary">
-                            {sub.branch}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 max-w-[220px]">
+                            {sub.branches.map((b) => (
+                              <span
+                                key={b}
+                                className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold"
+                              >
+                                {b}
+                              </span>
+                            ))}
+                          </div>
                         </td>
 
                         {/* Semester */}
@@ -1049,7 +1104,7 @@ export default function TaxonomyClient({
 
                             {/* Activate / Deactivate Toggle */}
                             <button
-                              onClick={() => handleToggleSubject(sub.code, sub.branch, reg, sub.active)}
+                              onClick={() => handleToggleSubject(sub)}
                               disabled={isToggling}
                               className={`px-3 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer disabled:opacity-50 ${
                                 sub.active
@@ -1129,6 +1184,7 @@ export default function TaxonomyClient({
                   <option value={10}>10 per page</option>
                   <option value={20}>20 per page</option>
                   <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
                 </select>
               </div>
 
@@ -2130,7 +2186,7 @@ export default function TaxonomyClient({
             </div>
 
             <p className="text-xs text-primary/70 leading-relaxed font-normal">
-              Are you sure you want to remove <span className="font-bold text-primary">{deletingSubject.code} - {deletingSubject.title}</span> ({deletingSubject.branch}, {deletingSubject.regulation || "R23"}) from the catalog?
+              Are you sure you want to remove <span className="font-bold text-primary">{deletingSubject.code} - {deletingSubject.title}</span> ({deletingSubject.branches.join(", ")}, {deletingSubject.regulation || "R23"}) from the catalog?
             </p>
 
             <div className="flex items-center justify-end gap-3 pt-2">

@@ -145,7 +145,7 @@ export default async function StudentSubjectsPage({
           {rawSubjects.map((sub: any) => (
             <Link
               key={`${sub.code}-${sub.branch}`}
-              href={`/student/subjects/${sub.code}`}
+              href={`/student/subjects/${encodeURIComponent(sub.code)}`}
               className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] hover:border-primary/40 transition-all flex flex-col justify-between space-y-4 group cursor-pointer"
             >
               <div className="space-y-3">
