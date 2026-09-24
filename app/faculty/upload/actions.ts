@@ -87,39 +87,7 @@ export async function uploadMaterialAction(formData: FormData) {
 
   // Insert Material records per target branch (enforcing strict section isolation)
   for (const branch of targetBranches) {
-    // 1. Ensure foreign key dependencies exist safely
-    try {
-      await supabase.from("regulations").upsert({
-        code: regulation,
-        name: `${regulation} Autonomous Regulation`,
-        active: true,
-      }, { onConflict: "code" });
-
-      await supabase.from("branches").upsert({
-        code: branch,
-        name: branch,
-        active: true,
-      }, { onConflict: "code" });
-
-      await supabase.from("semesters").upsert({
-        number: semester,
-        name: `${semester}th Semester`,
-        active: true,
-      }, { onConflict: "number" });
-
-      await supabase.from("subjects").upsert({
-        code: subject,
-        title: subjectTitle,
-        branch: branch,
-        semester: semester,
-        regulation: regulation,
-        active: true,
-      }, { onConflict: "code,branch,regulation" });
-    } catch (fkErr) {
-      console.warn("Taxonomy prep notice:", fkErr);
-    }
-
-    // 2. Pre-generate deterministic UUID for material
+    // Pre-generate deterministic UUID for material
     const materialId = crypto.randomUUID();
 
     const { error: insertError } = await supabase

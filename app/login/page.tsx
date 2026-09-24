@@ -40,12 +40,6 @@ export default function LoginPage() {
         {/* Form Inputs & Actions */}
         <LoginForm />
 
-        {/* Clean Student Helper Pill */}
-        <div className="pt-1 text-center">
-          <div className="inline-block bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-[11px] text-slate-500 font-normal">
-            For students: Your initial password is your registration number.
-          </div>
-        </div>
 
       </div>
     </main>

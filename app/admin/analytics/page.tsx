@@ -15,6 +15,7 @@ interface MaterialItem {
   id: string;
   title: string;
   type: string;
+  subject?: string;
   branch: string;
   semester: number;
   created_at: string;
@@ -90,6 +91,7 @@ export default async function AdminAnalyticsPage() {
         id,
         title,
         type,
+        subject,
         branch,
         semester,
         created_at,
@@ -100,7 +102,10 @@ export default async function AdminAnalyticsPage() {
         material_files (
           id,
           file_name,
-          size
+          size,
+          mime_type,
+          version,
+          storage_ref
         )
       `)
       .neq("state", "deleted")
@@ -207,10 +212,54 @@ export default async function AdminAnalyticsPage() {
       return true;
     });
 
-    const views = validStudentEvents.filter((e) => e.type === "view").length;
-    const downloads = validStudentEvents.filter((e) => e.type === "download").length;
+    // Count distinct students who viewed this material (strictly 1 count per student)
+    const uniqueViewers = new Set<string>();
+    validStudentEvents.filter((e) => e.type === "view").forEach((ev) => {
+      const userProfile = 
+        (ev.users as Record<string, unknown>) || 
+        (ev.actor_id ? userMap.get(String(ev.actor_id)) : null) ||
+        (ev.actor_email ? userMap.get(String(ev.actor_email).toLowerCase()) : null);
+      const roll = (userProfile?.roll_number as string) || ev.actor_roll || ev.metadata?.roll_number || (userProfile?.email as string) || ev.actor_email || ev.actor_id;
+      if (roll) uniqueViewers.add(String(roll).toUpperCase());
+    });
 
-    const engagementLogs: StudentEngagementLog[] = validStudentEvents.map((ev, idx) => {
+    // Count distinct students who downloaded this material (strictly 1 count per student)
+    const uniqueDownloaders = new Set<string>();
+    validStudentEvents.filter((e) => e.type === "download").forEach((ev) => {
+      const userProfile = 
+        (ev.users as Record<string, unknown>) || 
+        (ev.actor_id ? userMap.get(String(ev.actor_id)) : null) ||
+        (ev.actor_email ? userMap.get(String(ev.actor_email).toLowerCase()) : null);
+      const roll = (userProfile?.roll_number as string) || ev.actor_roll || ev.metadata?.roll_number || (userProfile?.email as string) || ev.actor_email || ev.actor_id;
+      if (roll) uniqueDownloaders.add(String(roll).toUpperCase());
+    });
+
+    const views = uniqueViewers.size;
+    const downloads = uniqueDownloaders.size;
+
+    // Deduplicate valid student events by (roll, action, file) keeping the latest event
+    const distinctEventsMap = new Map<string, any>();
+    validStudentEvents.forEach((ev) => {
+      const userProfile = 
+        (ev.users as Record<string, unknown>) || 
+        (ev.actor_id ? userMap.get(String(ev.actor_id)) : null) ||
+        (ev.actor_email ? userMap.get(String(ev.actor_email).toLowerCase()) : null);
+
+      const userEmail = ((userProfile?.email as string) || ev.actor_email || ev.metadata?.email || "").toLowerCase();
+      const roll = (userProfile?.roll_number as string) || ev.actor_roll || ev.metadata?.roll_number || (userEmail.includes("@") ? userEmail.split("@")[0].toUpperCase() : "");
+      if (!roll) return; // Skip events without identified student roll
+
+      const fileName = ev.file_name || ev.metadata?.file_name || "material_workspace";
+      const key = `${roll.toUpperCase()}__${ev.type}__${fileName}`;
+
+      if (!distinctEventsMap.has(key)) {
+        distinctEventsMap.set(key, ev);
+      }
+    });
+
+    const distinctEvents = Array.from(distinctEventsMap.values());
+
+    const engagementLogs: StudentEngagementLog[] = distinctEvents.map((ev, idx) => {
       const userProfile = 
         (ev.users as Record<string, unknown>) || 
         (ev.actor_id ? userMap.get(String(ev.actor_id)) : null) ||
@@ -262,11 +311,78 @@ export default async function AdminAnalyticsPage() {
     };
   });
 
-  // Sort materials with newest at top and oldest at bottom
-  materialsWithMetrics.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  // Group multi-branch materials sharing the same course unit into a single section
+  const groupedMaterialsMap = new Map<string, any>();
+  materialsWithMetrics.forEach((m) => {
+    const normTitle = (m.title || "").trim().toLowerCase();
+    const normSub = (m.subject || "").trim().toUpperCase();
+    const sem = m.semester || 0;
+    const type = (m.type || "").trim().toLowerCase();
+    const key = `${normSub}___${normTitle}___${sem}___${type}`;
 
-  const totalViews = materialsWithMetrics.reduce((acc, curr) => acc + curr.views, 0);
-  const totalDownloads = materialsWithMetrics.reduce((acc, curr) => acc + curr.downloads, 0);
+    const existing = groupedMaterialsMap.get(key);
+    const branch = (m.branch || "CIC").toUpperCase();
+
+    if (existing) {
+      if (!existing.ids) existing.ids = [existing.id];
+      if (!existing.ids.includes(m.id)) existing.ids.push(m.id);
+
+      if (!existing.branches) existing.branches = [existing.branch];
+      if (!existing.branches.includes(branch)) existing.branches.push(branch);
+
+      // Merge files deduplicated by file_name
+      const existingFileNames = new Set((existing.material_files || []).map((f: any) => f.file_name));
+      (m.material_files || []).forEach((f: any) => {
+        if (!existingFileNames.has(f.file_name)) {
+          existing.material_files.push(f);
+          existingFileNames.add(f.file_name);
+        }
+      });
+
+      // Merge engagement logs deduplicated by (rollNumber, action, fileName)
+      if (m.engagementLogs && m.engagementLogs.length > 0) {
+        const logKeyMap = new Map(
+          (existing.engagementLogs || []).map((l: any) => [`${(l.rollNumber || l.email).toUpperCase()}__${l.action}__${l.fileName || "workspace"}`, l])
+        );
+        m.engagementLogs.forEach((l: any) => {
+          const key = `${(l.rollNumber || l.email).toUpperCase()}__${l.action}__${l.fileName || "workspace"}`;
+          if (!logKeyMap.has(key)) {
+            existing.engagementLogs.push(l);
+            logKeyMap.set(key, l);
+          }
+        });
+      }
+
+      // Re-calculate unique views and downloads across all linked branches
+      const allUniqueViewers = new Set(
+        (existing.engagementLogs || [])
+          .filter((l: any) => l.action === "view")
+          .map((l: any) => (l.rollNumber || l.email).toUpperCase())
+      );
+      const allUniqueDownloaders = new Set(
+        (existing.engagementLogs || [])
+          .filter((l: any) => l.action === "download")
+          .map((l: any) => (l.rollNumber || l.email).toUpperCase())
+      );
+      existing.views = allUniqueViewers.size;
+      existing.downloads = allUniqueDownloaders.size;
+    } else {
+      groupedMaterialsMap.set(key, {
+        ...m,
+        ids: [m.id],
+        branches: [branch],
+        material_files: [...(m.material_files || [])],
+        engagementLogs: [...(m.engagementLogs || [])],
+      });
+    }
+  });
+
+  const consolidatedMaterials = Array.from(groupedMaterialsMap.values());
+  // Sort materials with newest at top and oldest at bottom
+  consolidatedMaterials.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+  const totalViews = consolidatedMaterials.reduce((acc, curr) => acc + curr.views, 0);
+  const totalDownloads = consolidatedMaterials.reduce((acc, curr) => acc + curr.downloads, 0);
 
   // Strictly filter dbUsers to ONLY genuine students
   const studentUsers = dbUsers.filter((u) => {
@@ -299,7 +415,7 @@ export default async function AdminAnalyticsPage() {
 
   return (
     <AnalyticsClient
-      materials={materialsWithMetrics}
+      materials={consolidatedMaterials}
       branches={branches}
       totalViews={totalViews}
       totalDownloads={totalDownloads}

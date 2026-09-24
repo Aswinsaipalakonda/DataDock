@@ -15,23 +15,40 @@ import {
   ChevronsLeft,
   ChevronsRight,
   X, 
-  GraduationCap 
+  GraduationCap,
+  Trash2,
+  FileText,
+  AlertTriangle
 } from "lucide-react";
-import { logExportEvent } from "./actions";
+import { logExportEvent, adminDeleteMaterial, adminDeleteMaterialFile } from "./actions";
 import { ToastContainer, ToastMessage } from "@/components/toast";
 import { StudentEngagementLog } from "./page";
-import StudentCohortProgressMatrix, { FileInfo, RegisteredStudent } from "@/components/student-cohort-progress-matrix";
+import StudentCohortProgressMatrix, { RegisteredStudent } from "@/components/student-cohort-progress-matrix";
+
+export interface AdminFileInfo {
+  id: string;
+  file_name: string;
+  size?: number;
+  file_size?: number;
+  mime_type?: string;
+  version?: number;
+  storage_ref?: string;
+  storage_path?: string;
+  is_primary?: boolean;
+}
 
 interface MaterialWithMetrics {
   id: string;
+  ids?: string[];
   title: string;
   type: string;
   branch: string;
+  branches?: string[];
   semester: number;
   created_at: string;
   views: number;
   downloads: number;
-  material_files?: FileInfo[];
+  material_files?: AdminFileInfo[];
   engagementLogs?: StudentEngagementLog[];
   users: {
     name: string;
@@ -54,11 +71,24 @@ export default function AnalyticsClient({
   totalDownloads,
   students,
 }: AnalyticsClientProps) {
+  const [materialsList, setMaterialsList] = useState<MaterialWithMetrics[]>(materials);
+  useEffect(() => {
+    setMaterialsList(materials);
+  }, [materials]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("ALL");
   const [selectedSemester, setSelectedSemester] = useState("ALL");
   const [selectedType, setSelectedType] = useState("ALL");
   const [isExporting, setIsExporting] = useState(false);
+
+  // Admin CRUD States
+  const [deleteMaterialTarget, setDeleteMaterialTarget] = useState<MaterialWithMetrics | null>(null);
+  const [isDeletingMaterial, setIsDeletingMaterial] = useState(false);
+
+  const [fileManageMaterial, setFileManageMaterial] = useState<MaterialWithMetrics | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [downloadingFileRef, setDownloadingFileRef] = useState<string | null>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,9 +105,9 @@ export default function AnalyticsClient({
   // Toast Notifications State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Body Scroll Lock when Drawer is open
+  // Body Scroll Lock when Drawer or Modals are open
   useEffect(() => {
-    if (isDrawerMounted) {
+    if (isDrawerMounted || deleteMaterialTarget || fileManageMaterial) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -85,7 +115,7 @@ export default function AnalyticsClient({
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isDrawerMounted]);
+  }, [isDrawerMounted, deleteMaterialTarget, fileManageMaterial]);
 
   // Focus scroll container when drawer becomes visible
   useEffect(() => {
@@ -110,13 +140,93 @@ export default function AnalyticsClient({
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const formatSize = (bytes?: number) => {
+    if (!bytes) return "—";
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1) return mb.toFixed(2) + " MB";
+    const kb = bytes / 1024;
+    return kb.toFixed(1) + " KB";
+  };
+
+  // Admin: Delete Material Handler
+  const handleDeleteMaterial = async () => {
+    if (!deleteMaterialTarget) return;
+    setIsDeletingMaterial(true);
+    try {
+      const res = await adminDeleteMaterial(deleteMaterialTarget.id, deleteMaterialTarget.ids);
+      if (res.success) {
+        const targetIds = deleteMaterialTarget.ids || [deleteMaterialTarget.id];
+        setMaterialsList((prev) => prev.filter((m) => !targetIds.includes(m.id)));
+        addToast("success", "Material Removed", `Successfully deleted "${deleteMaterialTarget.title}".`);
+        setDeleteMaterialTarget(null);
+      } else {
+        addToast("error", "Failed to Delete", res.error || "An error occurred.");
+      }
+    } catch {
+      addToast("error", "Action Failed", "Failed to delete material.");
+    } finally {
+      setIsDeletingMaterial(false);
+    }
+  };
+
+  // Admin: Delete Single File Handler
+  const handleDeleteFile = async (fileId: string, storageRef?: string, fileName?: string) => {
+    if (!fileManageMaterial) return;
+    setDeletingFileId(fileId);
+    try {
+      const res = await adminDeleteMaterialFile(fileManageMaterial.id, fileId, storageRef);
+      if (res.success) {
+        const updatedFiles = (fileManageMaterial.material_files || []).filter((f) => f.id !== fileId);
+        const updatedMat = { ...fileManageMaterial, material_files: updatedFiles };
+        setFileManageMaterial(updatedMat);
+        setMaterialsList((prev) =>
+          prev.map((m) => (m.id === fileManageMaterial.id ? updatedMat : m))
+        );
+        addToast("success", "File Deleted", `Removed "${fileName || "file"}" from syllabus.`);
+      } else {
+        addToast("error", "Failed to Delete File", res.error || "An error occurred.");
+      }
+    } catch {
+      addToast("error", "Action Failed", "Failed to delete file.");
+    } finally {
+      setDeletingFileId(null);
+    }
+  };
+
+  // Admin: Download File Handler
+  const handleDownloadFile = (storageRef?: string, fileName?: string) => {
+    if (!storageRef) return;
+    setDownloadingFileRef(storageRef);
+    try {
+      const downloadUrl = `/api/materials/file/${storageRef}?download=1&filename=${encodeURIComponent(fileName || "file")}`;
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName || "file";
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch {
+      addToast("error", "Download Failed", "Unable to download file.");
+    } finally {
+      setDownloadingFileRef(null);
+    }
+  };
+
+  // Admin: Preview File Handler
+  const handlePreviewFile = (storageRef?: string, fileName?: string) => {
+    if (!storageRef) return;
+    const previewUrl = `/api/materials/file/${storageRef}?filename=${encodeURIComponent(fileName || "file")}`;
+    window.open(previewUrl, "_blank");
+  };
+
   const materialTypes = useMemo(() => {
     const types = new Set<string>();
-    materials.forEach((m) => {
+    materialsList.forEach((m) => {
       if (m.type) types.add(m.type);
     });
     return Array.from(types).sort();
-  }, [materials]);
+  }, [materialsList]);
 
   // Smooth open drawer (matched to Add New User)
   const openInspectModal = (material: MaterialWithMetrics) => {
@@ -139,7 +249,7 @@ export default function AnalyticsClient({
   };
 
   const filtered = useMemo(() => {
-    const list = materials.filter((m) => {
+    const list = materialsList.filter((m) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const titleMatch = m.title.toLowerCase().includes(q);
@@ -151,8 +261,11 @@ export default function AnalyticsClient({
         }
       }
 
-      if (selectedBranch !== "ALL" && m.branch !== selectedBranch) {
-        return false;
+      if (selectedBranch !== "ALL") {
+        const matchesBranch = m.branches && m.branches.length > 0 
+          ? m.branches.includes(selectedBranch) 
+          : m.branch === selectedBranch;
+        if (!matchesBranch) return false;
       }
 
       if (selectedSemester !== "ALL" && m.semester !== parseInt(selectedSemester, 10)) {
@@ -168,7 +281,7 @@ export default function AnalyticsClient({
 
     // Ensure recent materials at top, old at bottom
     return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-  }, [materials, searchQuery, selectedBranch, selectedSemester, selectedType]);
+  }, [materialsList, searchQuery, selectedBranch, selectedSemester, selectedType]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
@@ -286,7 +399,7 @@ export default function AnalyticsClient({
             </div>
           </div>
           <div className="space-y-0.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{materials.length}</span>
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{materialsList.length}</span>
             <span className="text-xs text-slate-400 block font-normal">Active syllabus documents</span>
           </div>
         </div>
@@ -371,7 +484,7 @@ export default function AnalyticsClient({
                   <th className="py-3.5 px-4">Academic Scope</th>
                   <th className="py-3.5 px-4 text-center">Views</th>
                   <th className="py-3.5 px-4 text-center">Downloads</th>
-                  <th className="py-3.5 pl-4 pr-6 text-right">Cohort Progress</th>
+                  <th className="py-3.5 pl-4 pr-6 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-normal text-slate-700">
@@ -401,10 +514,12 @@ export default function AnalyticsClient({
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold border border-slate-200">
-                          {m.branch}
-                        </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {(m.branches && m.branches.length > 0 ? m.branches : [m.branch]).map((b) => (
+                          <span key={b} className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold border border-slate-200">
+                            {b}
+                          </span>
+                        ))}
                         <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
                           Sem {m.semester}
                         </span>
@@ -435,17 +550,35 @@ export default function AnalyticsClient({
                       </button>
                     </td>
 
-                    {/* Inspect Cohort Progress Action */}
+                    {/* Admin Actions */}
                     <td className="py-3.5 pl-4 pr-6 text-right">
-                      <button
-                        onClick={() => openInspectModal(m)}
-                        title="View Full Cohort Progress Matrix"
-                        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
-                      >
-                        <Users className="h-3.5 w-3.5" />
-                        <span>Cohort Matrix</span>
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openInspectModal(m)}
+                          title="View Full Cohort Progress Matrix"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Cohort Matrix</span>
+                        </button>
+
+                        <button
+                          onClick={() => setFileManageMaterial(m)}
+                          title="Inspect and Delete Attached Files"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          <span>Files ({m.material_files?.length || 0})</span>
+                        </button>
+
+                        <button
+                          onClick={() => setDeleteMaterialTarget(m)}
+                          title="Delete Syllabus Material"
+                          className="p-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-all cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -593,24 +726,24 @@ export default function AnalyticsClient({
           />
 
           {/* Right Slide-over Panel with 500ms smooth cubic-bezier slide */}
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-12 z-50">
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-6 md:pl-10 z-50">
             <div 
-              className={`w-screen max-w-2xl sm:max-w-3xl lg:max-w-4xl bg-white shadow-2xl flex flex-col border-l border-slate-200 transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overscroll-contain ${
+              className={`w-screen max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl bg-white shadow-2xl flex flex-col border-l border-slate-200 transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overscroll-contain ${
                 isDrawerVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
               }`}
             >
               
               {/* Fixed Header */}
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-2xl bg-blue-50 text-blue-700 border border-blue-200">
+              <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50 shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="p-2 rounded-2xl bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
                     <GraduationCap className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                    <h2 className="text-sm sm:text-lg font-bold text-slate-900 leading-tight">
                       Student Cohort Progress Matrix
                     </h2>
-                    <p className="text-xs text-slate-500 font-normal">
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-normal">
                       Real-time class engagement analytics and per-file audit trails.
                     </p>
                   </div>
@@ -619,7 +752,7 @@ export default function AnalyticsClient({
                 <button
                   type="button"
                   onClick={closeInspectModal}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer shrink-0"
                   title="Close Window"
                 >
                   <X className="h-5 w-5" />
@@ -631,7 +764,7 @@ export default function AnalyticsClient({
                 ref={scrollContainerRef}
                 tabIndex={0}
                 onWheel={handleScrollWheel}
-                className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 focus:outline-none"
+                className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 focus:outline-none"
                 style={{
                   overscrollBehavior: "contain",
                   touchAction: "pan-y",
@@ -640,7 +773,9 @@ export default function AnalyticsClient({
                 <StudentCohortProgressMatrix
                   materialId={inspectingMaterial.id}
                   materialTitle={inspectingMaterial.title}
-                  branch={inspectingMaterial.branch}
+                  branch={inspectingMaterial.branches ? inspectingMaterial.branches.join(", ") : inspectingMaterial.branch}
+                  branches={inspectingMaterial.branches}
+                  linkedMaterialIds={inspectingMaterial.ids}
                   semester={inspectingMaterial.semester}
                   files={inspectingMaterial.material_files || []}
                   activityLogs={inspectingMaterial.engagementLogs || []}
@@ -651,19 +786,209 @@ export default function AnalyticsClient({
               </div>
 
               {/* Fixed Footer */}
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
                 <span className="text-xs text-slate-500 font-normal">
-                  Total Tracked Events: <strong className="text-slate-900 font-semibold">{inspectingMaterial.engagementLogs?.length || 0}</strong>
+                  Verified Engagement: <strong className="text-slate-900 font-semibold">{inspectingMaterial.views || 0} Viewed</strong> • <strong className="text-slate-900 font-semibold">{inspectingMaterial.downloads || 0} Downloaded</strong>
                 </span>
                 <button
                   type="button"
                   onClick={closeInspectModal}
-                  className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm rounded-full shadow-xs cursor-pointer"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm rounded-full shadow-xs cursor-pointer whitespace-nowrap"
                 >
                   Close Window
                 </button>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ========================================================================= */}
+      {/* DELETE MATERIAL CONFIRMATION MODAL */}
+      {/* ========================================================================= */}
+      {deleteMaterialTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-200 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                  Delete Syllabus Material
+                </h3>
+                <p className="text-xs text-slate-500">
+                  This action will archive and hide the document.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+              <div className="font-semibold text-slate-800 line-clamp-2">
+                {deleteMaterialTarget.title}
+              </div>
+              <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                <span className="font-medium text-slate-700">{deleteMaterialTarget.branch} • Sem {deleteMaterialTarget.semester}</span>
+                <span>•</span>
+                <span>{deleteMaterialTarget.users?.name || "Faculty Member"}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to remove this course material? It will immediately disappear from both student and faculty portals.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteMaterialTarget(null)}
+                disabled={isDeletingMaterial}
+                className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteMaterial}
+                disabled={isDeletingMaterial}
+                className="px-5 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+              >
+                {isDeletingMaterial ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MANAGE ATTACHED FILES MODAL (ADMIN CRUD FOR MISTAKEN FILES) */}
+      {/* ========================================================================= */}
+      {fileManageMaterial && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center shrink-0">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    Attached Files Management
+                  </h3>
+                  <p className="text-xs text-slate-500 line-clamp-1 max-w-md">
+                    {fileManageMaterial.title}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setFileManageMaterial(null)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1 space-y-2">
+              {fileManageMaterial.material_files && fileManageMaterial.material_files.length > 0 ? (
+                fileManageMaterial.material_files.map((file) => {
+                  const isDeleting = deletingFileId === file.id;
+                  const isDownloading = downloadingFileRef === (file.storage_ref || file.storage_path);
+                  return (
+                    <div
+                      key={file.id}
+                      className="pt-2 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-50/70 hover:bg-slate-100/70 rounded-2xl border border-slate-200/80 transition-all text-xs"
+                    >
+                      <div className="min-w-0 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-700 flex items-center justify-center shrink-0 font-bold text-[10px]">
+                          PDF
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 truncate max-w-xs block">
+                              {file.file_name}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[9px] font-bold">
+                              v{file.version || 1}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500">
+                            {formatSize(file.file_size || file.size)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handlePreviewFile(file.storage_ref || file.storage_path, file.file_name)}
+                          className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-full border border-slate-200 flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                        >
+                          <Eye className="h-3 w-3 text-blue-600" />
+                          <span>Preview</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadFile(file.storage_ref || file.storage_path, file.file_name)}
+                          disabled={isDownloading}
+                          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-full flex items-center gap-1 cursor-pointer transition-all shadow-2xs disabled:opacity-50"
+                        >
+                          {isDownloading ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Download className="h-3 w-3" />
+                          )}
+                          <span>Download</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteFile(file.id, file.storage_ref || file.storage_path, file.file_name)}
+                          disabled={isDeleting}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-full border border-red-200 flex items-center gap-1 cursor-pointer transition-all shadow-2xs disabled:opacity-50"
+                          title="Delete mistakenly uploaded file"
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="h-3 w-3 animate-spin text-red-600" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  No files currently attached to this material.
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className="text-xs text-slate-400">
+                {fileManageMaterial.material_files?.length || 0} file(s) attached
+              </span>
+              <button
+                type="button"
+                onClick={() => setFileManageMaterial(null)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-full shadow-xs cursor-pointer"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

@@ -1,5 +1,4 @@
 import { getCachedUserProfile } from "@/utils/supabase/cached-auth";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { 
@@ -40,7 +39,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function FacultyDashboardPage() {
-  const cookieStore = await cookies();
   const { user, profile, supabase } = await getCachedUserProfile();
   if (!user) redirect("/login");
 
@@ -59,25 +57,28 @@ export default async function FacultyDashboardPage() {
 
   const rawMaterials = (materialsData as unknown as MaterialWithFiles[]) || [];
 
-  // Fetch all activity events across persistent server-store, cookies, and Supabase database
+  // Fetch student activity events from MySQL database and server activity store
   const serverEvents = getServerActivityEvents();
-  let cookieEvents: any[] = [];
-  try {
-    const rawCookie = cookieStore.get("de_live_activity_events")?.value;
-    if (rawCookie) cookieEvents = JSON.parse(rawCookie);
-  } catch {}
 
   const { data: dbEventsData } = await supabase
     .from("activity_events")
     .select("id, type, target_id, actor_id, metadata, created_at");
 
   const dbEvents = (dbEventsData as unknown as any[]) || [];
-  const allEvents = [...serverEvents, ...cookieEvents, ...dbEvents];
+  const allEvents = [...serverEvents, ...dbEvents];
 
-  // Map events to deduplicate
+  // Map events to deduplicate within reasonable session windows (30 min per student per material/file)
   const eventsMap = new Map<string, any>();
   allEvents.forEach((ev) => {
-    const key = ev.id || `${ev.type}-${ev.target_id || ev.targetId}-${ev.actor_roll || ev.actor_id}-${ev.file_name || "page"}-${ev.created_at}`;
+    // Exclude faculty self-views
+    if (ev.actor_id === user.id) return;
+
+    const actorKey = ev.actor_roll || ev.metadata?.roll_number || (ev.actor_email ? ev.actor_email.split('@')[0].toUpperCase() : '') || ev.actor_id || "anonymous";
+    const targetId = ev.target_id || ev.targetId;
+    const timeBucket = Math.floor(new Date(ev.created_at || ev.timestamp || 0).getTime() / (30 * 60 * 1000));
+    const filePart = ev.file_name || ev.metadata?.file_name || "page";
+    const key = `${ev.type}-${targetId}-${actorKey}-${filePart}-${timeBucket}`;
+
     if (!eventsMap.has(key)) {
       eventsMap.set(key, ev);
     }
@@ -86,11 +87,26 @@ export default async function FacultyDashboardPage() {
 
   const facultyMaterialIds = new Set(rawMaterials.map((m) => m.id));
 
-  // Attach dynamic real-time metrics to each material
+  // Attach dynamic real-time metrics to each material (unique student counts)
+  let totalViews = 0;
+  let totalDownloads = 0;
+
   const materialsWithMetrics = rawMaterials.map((m) => {
     const matEvents = events.filter((e) => (e.target_id || e.targetId) === m.id);
-    const viewCount = matEvents.filter((e) => e.type === "view").length;
-    const downloadCount = matEvents.filter((e) => e.type === "download").length;
+    const uniqueViewers = new Set<string>();
+    const uniqueDownloaders = new Set<string>();
+
+    matEvents.forEach((ev) => {
+      const actorKey = ev.actor_roll || ev.metadata?.roll_number || (ev.actor_email ? ev.actor_email.split('@')[0].toUpperCase() : '') || ev.actor_id || "anonymous";
+      if (ev.type === "view") uniqueViewers.add(actorKey);
+      if (ev.type === "download") uniqueDownloaders.add(actorKey);
+    });
+
+    const viewCount = uniqueViewers.size;
+    const downloadCount = uniqueDownloaders.size;
+
+    totalViews += viewCount;
+    totalDownloads += downloadCount;
 
     return {
       ...m,
@@ -108,11 +124,6 @@ export default async function FacultyDashboardPage() {
     if (m.subject) distinctSubjects.add(m.subject.toUpperCase().trim());
   });
   const totalSubjectsCount = distinctSubjects.size;
-
-  // Total views and downloads across all materials owned by this faculty
-  const facultyEvents = events.filter((e) => facultyMaterialIds.has(e.target_id || e.targetId));
-  const totalViews = facultyEvents.filter((e) => e.type === "view").length;
-  const totalDownloads = facultyEvents.filter((e) => e.type === "download").length;
 
   return (
     <div className="space-y-6 sm:space-y-7 w-full max-w-7xl pb-8">

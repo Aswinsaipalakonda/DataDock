@@ -57,6 +57,8 @@ export interface StudentCohortProgressMatrixProps {
   materialId: string;
   materialTitle: string;
   branch: string;
+  branches?: string[];
+  linkedMaterialIds?: string[];
   semester: number;
   files: FileInfo[];
   activityLogs: ActivityLogItem[];
@@ -89,6 +91,8 @@ interface StudentProgressRecord {
   totalViews: number;
   totalDownloads: number;
   lastActivityAt?: string;
+  lastViewedAt?: string;
+  lastDownloadedAt?: string;
 }
 
 // Resilient file name normalizer to prevent whitespace / comma mismatch
@@ -130,6 +134,8 @@ export default function StudentCohortProgressMatrix({
   materialId,
   materialTitle,
   branch,
+  branches,
+  linkedMaterialIds,
   semester,
   files,
   activityLogs,
@@ -138,7 +144,9 @@ export default function StudentCohortProgressMatrix({
 }: StudentCohortProgressMatrixProps) {
   const [selectedFileFilter, setSelectedFileFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "downloaded" | "viewed" | "pending">("ALL");
-  const [searchQuery, setSearchQuery] = useState<string>("" );
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>("ALL");
+  const [selectedSectionFilter, setSelectedSectionFilter] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [inspectingStudent, setInspectingStudent] = useState<StudentProgressRecord | null>(null);
 
@@ -149,13 +157,19 @@ export default function StudentCohortProgressMatrix({
     ];
   }, [files]);
 
+  const targetBranches = useMemo(() => {
+    if (branches && branches.length > 0) {
+      return branches.map((b) => resolveBranchCode(b));
+    }
+    return branch.split(/[,/]+/).map((b) => resolveBranchCode(b.trim()));
+  }, [branch, branches]);
+
   // Compute Full Cohort Records using actual registered students from User Management matching this class
   const cohortRecords: StudentProgressRecord[] = useMemo(() => {
-    const targetBranch = resolveBranchCode(branch);
     const targetSem = Number(semester) || 3;
 
     // 1. Build deduplicated Map by normalized uppercase roll number
-    const cohortMap = new Map<string, { roll: string; name: string; section: string; email?: string }>();
+    const cohortMap = new Map<string, { roll: string; name: string; section: string; branch: string; email?: string }>();
 
     // 2. Overlay all actual registered students from User Management & Roster
     if (students && students.length > 0) {
@@ -171,12 +185,13 @@ export default function StudentCohortProgressMatrix({
         const sSem = Number(s.current_semester);
 
         // Check if student belongs to this branch cohort
-        if (sBranch === targetBranch && (sSem === targetSem || isNaN(sSem) || !s.current_semester)) {
+        if (targetBranches.includes(sBranch) && (sSem === targetSem || isNaN(sSem) || !s.current_semester)) {
           const section = (s.section || (parseInt(roll.slice(-2), 10) <= 36 ? "A" : "B")).toUpperCase();
           cohortMap.set(roll, {
             roll,
             name: s.name?.trim() || `Student ${roll.slice(-4)}`,
             section,
+            branch: sBranch,
             email: s.email,
           });
         }
@@ -197,13 +212,14 @@ export default function StudentCohortProgressMatrix({
 
         if (logRoll && !isFacultyOrAdmin) {
           const logBranch = resolveBranchCode(log.branch, logRoll);
-          if (logBranch === targetBranch) {
+          if (targetBranches.includes(logBranch)) {
             const existing = cohortMap.get(logRoll);
             const section = (log.section || existing?.section || (parseInt(logRoll.slice(-2), 10) <= 36 ? "A" : "B")).toUpperCase();
             cohortMap.set(logRoll, {
               roll: logRoll,
               name: (existing && existing.name && !existing.name.startsWith("Student ")) ? existing.name : (log.studentName || `Student ${logRoll.slice(-4)}`),
               section,
+              branch: logBranch,
               email: log.email || existing?.email,
             });
           }
@@ -239,7 +255,7 @@ export default function StudentCohortProgressMatrix({
         const normTarget = normalizeFileName(f.file_name);
 
         const fileEvents = studentEvents.filter((e) => {
-          if (!e.fileName) return e.action === "view";
+          if (!e.fileName) return false;
           const normEv = normalizeFileName(e.fileName);
           return normEv === normTarget || normEv.includes(normTarget) || normTarget.includes(normEv);
         });
@@ -260,10 +276,10 @@ export default function StudentCohortProgressMatrix({
           fileId: f.id,
           fileName: f.file_name,
           viewed: viewEvents.length > 0,
-          viewCount: viewEvents.length,
+          viewCount: viewEvents.length > 0 ? 1 : 0, // strictly 1 per student
           lastViewedAt: lastView,
           downloaded: downloadEvents.length > 0,
-          downloadCount: downloadEvents.length,
+          downloadCount: downloadEvents.length > 0 ? 1 : 0, // strictly 1 per student
           lastDownloadedAt: lastDownload,
         };
       });
@@ -272,7 +288,7 @@ export default function StudentCohortProgressMatrix({
       let hasViewed = false;
 
       if (selectedFileFilter === "ALL") {
-        hasDownloaded = fileStatuses.some((fs) => fs.downloaded);
+        hasDownloaded = fileStatuses.some((fs) => fs.downloaded) || studentEvents.some((e) => e.action === "download");
         hasViewed = fileStatuses.some((fs) => fs.viewed) || studentEvents.some((e) => e.action === "view");
       } else {
         const normFilter = normalizeFileName(selectedFileFilter);
@@ -282,27 +298,32 @@ export default function StudentCohortProgressMatrix({
       }
 
       const isPending = !hasDownloaded && !hasViewed;
-      const totalViews = fileStatuses.reduce((acc, curr) => acc + curr.viewCount, 0);
-      const totalDownloads = fileStatuses.reduce((acc, curr) => acc + curr.downloadCount, 0);
+
+      const viewEvents = studentEvents.filter((e) => e.action === "view");
+      const downloadEvents = studentEvents.filter((e) => e.action === "download");
+      const lastViewedAt = viewEvents.length > 0 ? viewEvents[0].timestamp : undefined;
+      const lastDownloadedAt = downloadEvents.length > 0 ? downloadEvents[0].timestamp : undefined;
       const lastActivityAt = studentEvents.length > 0 ? studentEvents[0].timestamp : undefined;
 
       return {
         rollNumber: c.roll,
         studentName: c.name,
         email: c.email || `${c.roll.toLowerCase()}@mvgrce.edu.in`,
-        branch: branch || "CIC",
+        branch: c.branch || branch || "CIC",
         semester: semester || 3,
         section: c.section,
         hasDownloaded,
         hasViewed,
         isPending,
         files: fileStatuses,
-        totalViews,
-        totalDownloads,
+        totalViews: hasViewed ? 1 : 0,
+        totalDownloads: hasDownloaded ? 1 : 0,
         lastActivityAt,
+        lastViewedAt,
+        lastDownloadedAt,
       };
     });
-  }, [branch, semester, activityLogs, normalizedFiles, selectedFileFilter, students]);
+  }, [targetBranches, semester, activityLogs, normalizedFiles, selectedFileFilter, students, branch]);
 
   const totalCount = cohortRecords.length;
   const downloadedCount = cohortRecords.filter((r) => r.hasDownloaded).length;
@@ -313,11 +334,35 @@ export default function StudentCohortProgressMatrix({
   const viewPct = totalCount > 0 ? Math.round((viewedCount / totalCount) * 100) : 0;
   const pendingPct = totalCount > 0 ? Math.round((pendingCount / totalCount) * 100) : 0;
 
+  // Available Branches and Sections in the cohort
+  const availableBranches = useMemo(() => {
+    const bSet = new Set<string>();
+    cohortRecords.forEach((r) => {
+      if (r.branch) bSet.add(r.branch.toUpperCase());
+    });
+    return Array.from(bSet).sort();
+  }, [cohortRecords]);
+
+  const availableSections = useMemo(() => {
+    const sSet = new Set<string>();
+    cohortRecords.forEach((r) => {
+      if (r.section) sSet.add(r.section.toUpperCase());
+    });
+    return Array.from(sSet).sort();
+  }, [cohortRecords]);
+
+  // Default page size is 96 cards as requested
   const [cohortPage, setCohortPage] = useState(1);
-  const [cohortPageSize, setCohortPageSize] = useState(24);
+  const [cohortPageSize, setCohortPageSize] = useState(96);
 
   const filteredCohort = useMemo(() => {
     return cohortRecords.filter((r) => {
+      if (selectedBranchFilter !== "ALL" && r.branch.toUpperCase() !== selectedBranchFilter.toUpperCase()) {
+        return false;
+      }
+      if (selectedSectionFilter !== "ALL" && r.section.toUpperCase() !== selectedSectionFilter.toUpperCase()) {
+        return false;
+      }
       if (statusFilter === "downloaded" && !r.hasDownloaded) return false;
       if (statusFilter === "viewed" && !r.hasViewed) return false;
       if (statusFilter === "pending" && !r.isPending) return false;
@@ -330,7 +375,7 @@ export default function StudentCohortProgressMatrix({
       }
       return true;
     });
-  }, [cohortRecords, statusFilter, searchQuery]);
+  }, [cohortRecords, selectedBranchFilter, selectedSectionFilter, statusFilter, searchQuery]);
 
   const totalCohortPages = Math.max(1, Math.ceil(filteredCohort.length / cohortPageSize));
   const validCohortPage = Math.min(cohortPage, totalCohortPages);
@@ -532,78 +577,61 @@ export default function StudentCohortProgressMatrix({
       {/* ========================================================================= */}
       {/* 3. CONTROLS BAR: STATUS TABS, SEARCH, VIEW MODE */}
       {/* ========================================================================= */}
-      <div className="p-3 bg-white rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Status Pills */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 overflow-x-auto">
-          <button
-            onClick={() => setStatusFilter("ALL")}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              statusFilter === "ALL"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            All ({totalCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter("downloaded")}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              statusFilter === "downloaded"
-                ? "bg-emerald-600 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-            <span>Downloaded ({downloadedCount})</span>
-          </button>
-          <button
-            onClick={() => setStatusFilter("viewed")}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              statusFilter === "viewed"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-            <span>Viewed ({viewedCount})</span>
-          </button>
-          <button
-            onClick={() => setStatusFilter("pending")}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              statusFilter === "pending"
-                ? "bg-rose-600 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-            <span>Pending ({pendingCount})</span>
-          </button>
-        </div>
-
-        {/* Search & View Switcher */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-56">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-            <input
-              placeholder="Search roll number or name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full focus:outline-none focus:border-primary text-slate-900 placeholder:text-slate-400 font-normal transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-2 text-slate-400 hover:text-slate-700 p-0.5 rounded-full cursor-pointer"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
+      <div className="p-3 sm:p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+        {/* Row 1: Status Pills & View Mode */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          {/* Status Pills */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 overflow-x-auto max-w-full">
+            <button
+              onClick={() => setStatusFilter("ALL")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                statusFilter === "ALL"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              All ({totalCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("downloaded")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                statusFilter === "downloaded"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+              <span>Downloaded ({downloadedCount})</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter("viewed")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                statusFilter === "viewed"
+                  ? "bg-amber-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+              <span>Viewed ({viewedCount})</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter("pending")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                statusFilter === "pending"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+              <span>Pending ({pendingCount})</span>
+            </button>
           </div>
 
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
+          {/* View Mode Toggle */}
+          <div className="flex items-center self-end md:self-auto p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
             <button
               onClick={() => setViewMode("grid")}
-              className={`p-1 rounded-lg cursor-pointer transition-all ${
+              className={`p-1.5 rounded-lg cursor-pointer transition-all ${
                 viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
               }`}
               title="Grid View"
@@ -612,13 +640,73 @@ export default function StudentCohortProgressMatrix({
             </button>
             <button
               onClick={() => setViewMode("table")}
-              className={`p-1 rounded-lg cursor-pointer transition-all ${
+              className={`p-1.5 rounded-lg cursor-pointer transition-all ${
                 viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-900"
               }`}
               title="Table View"
             >
               <ListFilter className="h-3.5 w-3.5" />
             </button>
+          </div>
+        </div>
+
+        {/* Row 2: Branch & Section Filter, Page Size, and Flexible Search Box */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2.5 border-t border-slate-100">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Branch Filter */}
+            {availableBranches.length > 1 && (
+              <select
+                value={selectedBranchFilter}
+                onChange={(e) => {
+                  setSelectedBranchFilter(e.target.value);
+                  setCohortPage(1);
+                }}
+                className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-full text-slate-700 focus:outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="ALL">All Branches ({totalCount})</option>
+                {availableBranches.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Section Filter */}
+            {availableSections.length > 0 && (
+              <select
+                value={selectedSectionFilter}
+                onChange={(e) => {
+                  setSelectedSectionFilter(e.target.value);
+                  setCohortPage(1);
+                }}
+                className="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-full text-slate-700 focus:outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="ALL">All Sections</option>
+                {availableSections.map((sec) => (
+                  <option key={sec} value={sec}>Sec {sec}</option>
+                ))}
+              </select>
+            )}
+
+           
+          </div>
+
+          {/* Search Box */}
+          <div className="relative w-full sm:w-56 md:w-64 shrink-0">
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+            <input
+              placeholder="Search roll or name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-full focus:outline-none focus:border-primary text-slate-900 placeholder:text-slate-400 font-normal transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700 p-0.5 rounded-full cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -628,7 +716,7 @@ export default function StudentCohortProgressMatrix({
       {/* ========================================================================= */}
       {viewMode === "grid" ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-500 font-medium px-1">
             <span>
               Showing{" "}
               <strong className="text-slate-900 font-semibold">
@@ -644,7 +732,7 @@ export default function StudentCohortProgressMatrix({
           </div>
 
           {filteredCohort.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-2 bg-slate-50/50 rounded-2xl border border-slate-200/80">
+            <div className="grid grid-cols-1 min-[440px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3 p-2 sm:p-2.5 bg-slate-50/50 rounded-2xl border border-slate-200/80">
               {paginatedCohort.map((student) => {
                 const isDownloaded = student.hasDownloaded;
                 const isViewed = student.hasViewed;
@@ -683,16 +771,28 @@ export default function StudentCohortProgressMatrix({
                       <span className="text-xs font-semibold truncate block w-full">
                         {student.studentName}
                       </span>
-                      <span className="text-[10px] text-slate-400 block">
-                        Sec {student.section}
+                      <span className="text-[10px] text-slate-500 font-medium block">
+                        {student.branch} • Sec {student.section}
                       </span>
                     </div>
 
-                    <div className="pt-1 flex items-center justify-between border-t border-slate-200/50">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] ${badgeClasses}`}>
-                        {statusLabel}
-                      </span>
-                      <ChevronRight className="h-3 w-3 text-slate-400" />
+                    {/* Timestamp & Status Badge */}
+                    <div className="pt-1.5 border-t border-slate-200/60 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] ${badgeClasses}`}>
+                          {statusLabel}
+                        </span>
+                        <ChevronRight className="h-3 w-3 text-slate-400" />
+                      </div>
+                      <div className="text-[9px] text-slate-400 truncate">
+                        {isDownloaded && student.lastDownloadedAt ? (
+                          <span className="text-emerald-700 font-medium">Downloaded: {formatTimestamp(student.lastDownloadedAt)}</span>
+                        ) : isViewed && student.lastViewedAt ? (
+                          <span className="text-amber-700 font-medium">Viewed: {formatTimestamp(student.lastViewedAt)}</span>
+                        ) : (
+                          <span className="text-slate-400">Not opened yet</span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -705,8 +805,8 @@ export default function StudentCohortProgressMatrix({
               </div>
               <p className="text-xs text-slate-500 font-medium">
                 {totalCount === 0 
-                  ? `No students are registered for ${branch} • Semester ${semester} in User Management yet.`
-                  : `No students match "${statusFilter}" in the cohort.`
+                  ? `No students are registered for ${targetBranches.join(", ")} • Semester ${semester} in User Management yet.`
+                  : `No students match the current filters.`
                 }
               </p>
             </div>
@@ -723,7 +823,9 @@ export default function StudentCohortProgressMatrix({
                 <tr>
                   <th className="py-2.5 pl-4 pr-2">Roll</th>
                   <th className="py-2.5 px-3">Student Name</th>
+                  <th className="py-2.5 px-2">Branch & Sec</th>
                   <th className="py-2.5 px-2">Status</th>
+                  <th className="py-2.5 px-2">Timestamp</th>
                   <th className="py-2.5 px-2 text-center">Views</th>
                   <th className="py-2.5 px-2 text-center">Downloads</th>
                   <th className="py-2.5 pr-4 text-right">Audit</th>
@@ -742,6 +844,9 @@ export default function StudentCohortProgressMatrix({
                       <td className="py-2.5 px-3 font-semibold text-slate-800 text-xs">
                         {student.studentName}
                       </td>
+                      <td className="py-2.5 px-2 font-medium text-slate-600 text-xs">
+                        {student.branch} • Sec {student.section}
+                      </td>
                       <td className="py-2.5 px-2">
                         {isDownloaded ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
@@ -759,6 +864,13 @@ export default function StudentCohortProgressMatrix({
                             <span>Pending</span>
                           </span>
                         )}
+                      </td>
+                      <td className="py-2.5 px-2 text-[11px] text-slate-500">
+                        {isDownloaded && student.lastDownloadedAt
+                          ? formatTimestamp(student.lastDownloadedAt)
+                          : isViewed && student.lastViewedAt
+                          ? formatTimestamp(student.lastViewedAt)
+                          : "—"}
                       </td>
                       <td className="py-2.5 px-2 text-center font-bold text-blue-700">
                         {student.totalViews}
@@ -908,6 +1020,12 @@ export default function StudentCohortProgressMatrix({
                 <p className="text-xs text-slate-500">
                   {inspectingStudent.email} • {inspectingStudent.branch} Sem {inspectingStudent.semester} (Sec {inspectingStudent.section})
                 </p>
+                {inspectingStudent.lastViewedAt && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full w-fit mt-1">
+                    <Clock className="h-3 w-3 text-amber-600" />
+                    <span>Material Page Visited: {formatTimestamp(inspectingStudent.lastViewedAt)}</span>
+                  </div>
+                )}
               </div>
 
               <button

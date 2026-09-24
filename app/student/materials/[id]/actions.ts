@@ -7,15 +7,27 @@ import { saveServerActivityEvent } from "@/utils/activity-store";
 
 // Helper to determine student roll number
 function extractRollNumber(user: any): string {
-  const email = user?.email || "";
+  const email = (user?.email || "").toLowerCase();
   if (user?.user_metadata?.roll_number) return user.user_metadata.roll_number.toUpperCase();
   if (email.includes("@")) {
     const prefix = email.split("@")[0].toUpperCase();
-    if (/^\d{5}[A-Z0-9]{5}$/i.test(prefix) || prefix.startsWith("23")) {
+    if (/^\d{5}[A-Z0-9]{5}$/i.test(prefix) || prefix.startsWith("23") || prefix.startsWith("24") || prefix.startsWith("25")) {
       return prefix;
     }
   }
-  return "23331A4701";
+  return user?.id ? `STU-${String(user.id).slice(0, 8)}` : "STUDENT";
+}
+
+function isFacultyOrAdmin(user: any): boolean {
+  const role = (user?.user_metadata?.role as string) || "";
+  const email = (user?.email || "").toLowerCase();
+  return (
+    role === "faculty" ||
+    role === "admin" ||
+    email.startsWith("faculty") ||
+    email.startsWith("testfaculty") ||
+    email.startsWith("admin")
+  );
 }
 
 // Toggle Bookmark Status for a Material
@@ -76,6 +88,11 @@ export async function trackMaterialPageView(materialId: string, materialTitle?: 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
+  // Never log views for faculty or admin members
+  if (isFacultyOrAdmin(user)) {
+    return { success: true, ignored: true };
+  }
+
   const roll = extractRollNumber(user);
   const email = user.email || `${roll.toLowerCase()}@mvgrce.edu.in`;
   const name = user.user_metadata?.name || `Student ${roll}`;
@@ -122,45 +139,49 @@ export async function trackDownloadAndGetUrl(fileId: string, materialId: string,
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
-  const roll = extractRollNumber(user);
-  const email = user.email || `${roll.toLowerCase()}@mvgrce.edu.in`;
-  const name = user.user_metadata?.name || `Student ${roll}`;
   const targetFileName = fileName || "Study Document";
 
-  // 1. Save directly to server persistent store
-  saveServerActivityEvent({
-    id: `ev-dl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    type: "download",
-    actor_id: user.id,
-    target_id: materialId,
-    actor_roll: roll,
-    actor_name: name,
-    actor_email: email,
-    file_id: fileId,
-    file_name: targetFileName,
-    action_detail: `Downloaded: ${targetFileName}`,
-    created_at: new Date().toISOString(),
-  });
+  // Only log download activity event if the actor is a student
+  if (!isFacultyOrAdmin(user)) {
+    const roll = extractRollNumber(user);
+    const email = user.email || `${roll.toLowerCase()}@mvgrce.edu.in`;
+    const name = user.user_metadata?.name || `Student ${roll}`;
 
-  // 2. Also try inserting to Supabase activity_events
-  try {
-    await supabase.from("activity_events").insert({
+    // 1. Save directly to server persistent store
+    saveServerActivityEvent({
+      id: `ev-dl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       type: "download",
       actor_id: user.id,
       target_id: materialId,
-      metadata: {
-        file_id: fileId,
-        file_name: targetFileName,
-        action: "file_download",
-        roll_number: roll,
-        email: email,
-        student_name: name,
-      },
+      actor_roll: roll,
+      actor_name: name,
+      actor_email: email,
+      file_id: fileId,
+      file_name: targetFileName,
+      action_detail: `Downloaded: ${targetFileName}`,
+      created_at: new Date().toISOString(),
     });
-  } catch {}
 
-  revalidatePath("/admin/analytics");
-  revalidatePath("/faculty/materials");
+    // 2. Also try inserting to Supabase activity_events
+    try {
+      await supabase.from("activity_events").insert({
+        type: "download",
+        actor_id: user.id,
+        target_id: materialId,
+        metadata: {
+          file_id: fileId,
+          file_name: targetFileName,
+          action: "file_download",
+          roll_number: roll,
+          email: email,
+          student_name: name,
+        },
+      });
+    } catch {}
+
+    revalidatePath("/admin/analytics");
+    revalidatePath("/faculty/materials");
+  }
 
   // If storageRef is mock "#", provide fallback
   if (!storageRef || storageRef === "#") {
@@ -180,46 +201,50 @@ export async function trackPreviewAndGetUrl(fileId: string, materialId: string, 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
-  const roll = extractRollNumber(user);
-  const email = user.email || `${roll.toLowerCase()}@mvgrce.edu.in`;
-  const name = user.user_metadata?.name || `Student ${roll}`;
   const targetFileName = fileName || "Study Document";
 
-  // 1. Save directly to server persistent store
-  saveServerActivityEvent({
-    id: `ev-prev-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    type: "view",
-    actor_id: user.id,
-    target_id: materialId,
-    actor_roll: roll,
-    actor_name: name,
-    actor_email: email,
-    file_id: fileId,
-    file_name: targetFileName,
-    action_detail: `Previewed: ${targetFileName}`,
-    created_at: new Date().toISOString(),
-  });
+  // Only log preview activity event if the actor is a student
+  if (!isFacultyOrAdmin(user)) {
+    const roll = extractRollNumber(user);
+    const email = user.email || `${roll.toLowerCase()}@mvgrce.edu.in`;
+    const name = user.user_metadata?.name || `Student ${roll}`;
 
-  // 2. Also try inserting to Supabase activity_events
-  try {
-    await supabase.from("activity_events").insert({
+    // 1. Save directly to server persistent store
+    saveServerActivityEvent({
+      id: `ev-prev-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       type: "view",
       actor_id: user.id,
       target_id: materialId,
-      metadata: {
-        file_id: fileId,
-        file_name: targetFileName,
-        action: "file_preview",
-        mode: "preview_modal",
-        roll_number: roll,
-        email: email,
-        student_name: name,
-      },
+      actor_roll: roll,
+      actor_name: name,
+      actor_email: email,
+      file_id: fileId,
+      file_name: targetFileName,
+      action_detail: `Previewed: ${targetFileName}`,
+      created_at: new Date().toISOString(),
     });
-  } catch {}
 
-  revalidatePath("/admin/analytics");
-  revalidatePath("/faculty/materials");
+    // 2. Also try inserting to Supabase activity_events
+    try {
+      await supabase.from("activity_events").insert({
+        type: "view",
+        actor_id: user.id,
+        target_id: materialId,
+        metadata: {
+          file_id: fileId,
+          file_name: targetFileName,
+          action: "file_preview",
+          mode: "preview_modal",
+          roll_number: roll,
+          email: email,
+          student_name: name,
+        },
+      });
+    } catch {}
+
+    revalidatePath("/admin/analytics");
+    revalidatePath("/faculty/materials");
+  }
 
   if (!storageRef || storageRef === "#") {
     return { error: "No physical file attached to this reference." };

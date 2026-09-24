@@ -324,6 +324,7 @@ export default async function StudentDashboard({
                 <Link
                   key={mat.id}
                   href={`/student/materials/${mat.id}`}
+                  prefetch={false}
                   className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 group hover:bg-slate-50/80 p-3 rounded-2xl transition-all cursor-pointer"
                 >
                   <div className="space-y-1.5 min-w-0">

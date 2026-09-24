@@ -8,11 +8,24 @@ import { X, Upload, Loader2, FileCheck, AlertCircle } from "lucide-react";
 interface AttachFileDialogProps {
   materialId: string;
   materialTitle: string;
+  linkedMaterialIds?: string[];
+  branches?: string[];
+  currentBranch?: string;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
-export default function AttachFileDialog({ materialId, materialTitle, onClose, onSuccess }: AttachFileDialogProps) {
+export default function AttachFileDialog({
+  materialId,
+  materialTitle,
+  linkedMaterialIds = [],
+  branches = [],
+  currentBranch,
+  onClose,
+  onSuccess,
+}: AttachFileDialogProps) {
+  const isMultiBranch = branches.length > 1 && linkedMaterialIds.length > 1;
+  const [scope, setScope] = useState<"all" | "single">("all");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +74,10 @@ export default function AttachFileDialog({ materialId, materialTitle, onClose, o
       const formData = new FormData();
       formData.append("materialId", materialId);
       formData.append("file", file);
+
+      if (isMultiBranch && scope === "all") {
+        formData.append("linkedMaterialIds", JSON.stringify(linkedMaterialIds));
+      }
 
       const result = await attachFileToMaterial(formData);
       if (result.error) {

@@ -623,6 +623,23 @@ class MySQLStorageBucket {
       },
     };
   }
+
+  async remove(paths: string[]) {
+    try {
+      const removed: string[] = [];
+      for (const p of paths) {
+        const fullPath = path.join(uploadBaseDir, p);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          removed.push(p);
+        }
+      }
+      return { data: removed, error: null };
+    } catch (err: any) {
+      console.error('Storage remove error:', err);
+      return { data: null, error: { message: err.message } };
+    }
+  }
 }
 
 // Main MySQL Client matching Supabase signature

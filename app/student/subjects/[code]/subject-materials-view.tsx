@@ -279,6 +279,7 @@ export default function SubjectMaterialsView({
                 <Link
                   key={mat.id}
                   href={`/student/materials/${mat.id}`}
+                  prefetch={false}
                   className="block p-4 sm:p-5 rounded-3xl bg-white border border-slate-200/90 shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-blue-300 active:scale-[0.99] transition-all cursor-pointer group"
                 >
                   <div className="flex items-center justify-between gap-3">

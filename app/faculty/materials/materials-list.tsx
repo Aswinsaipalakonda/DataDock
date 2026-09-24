@@ -10,6 +10,8 @@ import {
 } from "./actions";
 import ReplaceDialog from "./replace-dialog";
 import AttachFileDialog from "./attach-file-dialog";
+import DeleteFileDialog from "./delete-file-dialog";
+import DeleteUnitDialog from "./delete-unit-dialog";
 import FilePreviewModal from "@/components/file-preview-modal";
 import { StudentEngagementLog } from "./page";
 import StudentCohortProgressMatrix, { RegisteredStudent } from "@/components/student-cohort-progress-matrix";
@@ -77,6 +79,8 @@ interface MaterialItem {
   created_at: string;
   subject: string;
   branch?: string;
+  branches?: string[];
+  ids?: string[];
   semester?: number;
   views?: number;
   downloads?: number;
@@ -208,8 +212,34 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
     materialId: string;
     fileId: string;
     fileName: string;
+    linkedMaterialIds?: string[];
+    branches?: string[];
+    currentBranch?: string;
   } | null>(null);
-  const [attachTarget, setAttachTarget] = useState<{ materialId: string; materialTitle: string } | null>(null);
+  const [attachTarget, setAttachTarget] = useState<{ 
+    materialId: string; 
+    materialTitle: string;
+    linkedMaterialIds?: string[];
+    branches?: string[];
+    currentBranch?: string;
+  } | null>(null);
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{
+    materialId: string;
+    fileId: string;
+    fileName: string;
+    storageRef?: string;
+    linkedMaterialIds?: string[];
+    branches?: string[];
+    currentBranch?: string;
+  } | null>(null);
+  const [deleteUnitTarget, setDeleteUnitTarget] = useState<{
+    materialId: string;
+    materialTitle: string;
+    subjectCode: string;
+    linkedMaterialIds?: string[];
+    branches?: string[];
+    currentBranch?: string;
+  } | null>(null);
   const [previewingFile, setPreviewingFile] = useState<{
     fileName: string;
     fileUrl: string | null;
@@ -227,7 +257,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
 
   // Body scroll locking
   useEffect(() => {
-    if (isDrawerMounted || isPreviewOpen || replaceTarget || attachTarget) {
+    if (isDrawerMounted || isPreviewOpen || replaceTarget || attachTarget || deleteFileTarget || deleteUnitTarget) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -235,7 +265,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isDrawerMounted, isPreviewOpen, replaceTarget, attachTarget]);
+  }, [isDrawerMounted, isPreviewOpen, replaceTarget, attachTarget, deleteFileTarget, deleteUnitTarget]);
 
   // Direct wheel scroll handler for cohort matrix
   const handleScrollWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -273,15 +303,98 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
     return Array.from(sems).sort((a, b) => a - b);
   }, [materials, subjects]);
 
+  // Grouped Materials (Aggregates multi-branch uploads for the same course unit into a single section)
+  const groupedMaterials = useMemo<MaterialItem[]>(() => {
+    const map = new Map<string, MaterialItem>();
+
+    materials.forEach((m) => {
+      const normTitle = (m.title || "").trim().toLowerCase();
+      const normSub = (m.subject || "").trim().toUpperCase();
+      const sem = m.semester || 0;
+      const type = (m.type || "").trim().toLowerCase();
+      const key = `${normSub}___${normTitle}___${sem}___${type}`;
+
+      const existing = map.get(key);
+      const branch = (m.branch || "CIC").toUpperCase();
+
+      if (existing) {
+        if (!existing.ids) existing.ids = [existing.id];
+        if (!existing.ids.includes(m.id)) existing.ids.push(m.id);
+
+        if (!existing.branches) existing.branches = [existing.branch || "CIC"];
+        if (!existing.branches.includes(branch)) existing.branches.push(branch);
+
+        // Merge files deduplicated by file_name
+        const existingFileNames = new Set((existing.material_files || []).map((f) => f.file_name));
+        (m.material_files || []).forEach((f) => {
+          if (!existingFileNames.has(f.file_name)) {
+            existing.material_files.push(f);
+            existingFileNames.add(f.file_name);
+          }
+        });
+
+        // Merge engagement logs deduplicated by (rollNumber, action, fileName)
+        if (m.engagementLogs && m.engagementLogs.length > 0) {
+          const logKeyMap = new Map(
+            (existing.engagementLogs || []).map((l) => [`${(l.rollNumber || l.email).toUpperCase()}__${l.action}__${l.fileName || "workspace"}`, l])
+          );
+          m.engagementLogs.forEach((l) => {
+            const key = `${(l.rollNumber || l.email).toUpperCase()}__${l.action}__${l.fileName || "workspace"}`;
+            if (!logKeyMap.has(key)) {
+              existing.engagementLogs?.push(l);
+              logKeyMap.set(key, l);
+            }
+          });
+        }
+
+        // Calculate unique student views and downloads across all linked branches
+        const uniqueViewers = new Set(
+          (existing.engagementLogs || [])
+            .filter((l) => l.action === "view")
+            .map((l) => (l.rollNumber || l.email || l.studentName).toUpperCase())
+        );
+        const uniqueDownloaders = new Set(
+          (existing.engagementLogs || [])
+            .filter((l) => l.action === "download")
+            .map((l) => (l.rollNumber || l.email || l.studentName).toUpperCase())
+        );
+        existing.views = uniqueViewers.size;
+        existing.downloads = uniqueDownloaders.size;
+      } else {
+        const uniqueViewers = new Set(
+          (m.engagementLogs || [])
+            .filter((l) => l.action === "view")
+            .map((l) => (l.rollNumber || l.email || l.studentName).toUpperCase())
+        );
+        const uniqueDownloaders = new Set(
+          (m.engagementLogs || [])
+            .filter((l) => l.action === "download")
+            .map((l) => (l.rollNumber || l.email || l.studentName).toUpperCase())
+        );
+        map.set(key, {
+          ...m,
+          ids: [m.id],
+          branches: [branch],
+          views: uniqueViewers.size,
+          downloads: uniqueDownloaders.size,
+          material_files: [...(m.material_files || [])],
+          engagementLogs: [...(m.engagementLogs || [])],
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [materials]);
+
   // Overall KPI Metrics
   const metrics = useMemo(() => {
-    const totalMaterials = materials.length;
-    const publishedCount = materials.filter((m) => m.state === "published").length;
-    const draftCount = materials.filter((m) => m.state === "draft").length;
-    const archivedCount = materials.filter((m) => m.state === "archived").length;
-    const totalViews = materials.reduce((acc, curr) => acc + (curr.views || 0), 0);
-    const totalDownloads = materials.reduce((acc, curr) => acc + (curr.downloads || 0), 0);
-    const totalFiles = materials.reduce((acc, curr) => acc + (curr.material_files?.length || 0), 0);
+    const totalMaterials = groupedMaterials.length;
+    const publishedCount = groupedMaterials.filter((m) => m.state === "published").length;
+    const draftCount = groupedMaterials.filter((m) => m.state === "draft").length;
+    const archivedCount = groupedMaterials.filter((m) => m.state === "archived").length;
+    const totalViews = groupedMaterials.reduce((acc, curr) => acc + (curr.views || 0), 0);
+    const totalDownloads = groupedMaterials.reduce((acc, curr) => acc + (curr.downloads || 0), 0);
+    const totalFiles = groupedMaterials.reduce((acc, curr) => acc + (curr.material_files?.length || 0), 0);
     return {
       totalMaterials,
       publishedCount,
@@ -291,12 +404,12 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
       totalDownloads,
       totalFiles,
     };
-  }, [materials]);
+  }, [groupedMaterials]);
 
   // Subject Stats for Level 1 (Course Portfolios View)
   const subjectStats = useMemo(() => {
     return subjects.map((sub) => {
-      const subMaterials = materials.filter(
+      const subMaterials = groupedMaterials.filter(
         (m) => (m.subject || "").toUpperCase() === sub.code.toUpperCase()
       );
       const totalViews = subMaterials.reduce((acc, curr) => acc + (curr.views || 0), 0);
@@ -315,7 +428,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
         totalFiles,
       };
     });
-  }, [subjects, materials]);
+  }, [subjects, groupedMaterials]);
 
   // Filtered Subjects List for Portfolio View
   const filteredSubjects = useMemo(() => {
@@ -352,7 +465,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
 
   // Filtered Materials List (Used in both "All Materials Feed" and "Selected Subject" view)
   const filteredMaterials = useMemo(() => {
-    let result = materials;
+    let result = groupedMaterials;
 
     // Scope to selected subject if one is chosen
     if (selectedSubjectCode) {
@@ -366,9 +479,15 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
       result = result.filter((m) => m.state === stateFilter);
     }
 
-    // Branch filter
+    // Branch filter (matches if any linked branch matches)
     if (branchFilter !== "all") {
-      result = result.filter((m) => (m.branch || "").toUpperCase() === branchFilter.toUpperCase());
+      const b = branchFilter.toUpperCase();
+      result = result.filter((m) => {
+        if (m.branches && m.branches.length > 0) {
+          return m.branches.includes(b);
+        }
+        return (m.branch || "").toUpperCase() === b;
+      });
     }
 
     // Semester filter
@@ -744,7 +863,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                <span>← All Subjects</span>
+                <span>All Subjects</span>
               </button>
               <span className="text-xs font-bold text-slate-400">/</span>
               <span className="text-xs font-bold text-slate-900 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 font-mono">
@@ -1305,7 +1424,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                               {m.subject}
                             </span>
                             <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium">
-                              {m.branch || "All Branches"} • Sem {m.semester || 3}
+                              {(m.branches && m.branches.length > 0 ? m.branches.join(", ") : (m.branch || "All Branches"))} • Sem {m.semester || 3}
                             </span>
                             <span
                               className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
@@ -1394,7 +1513,14 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                         </button>
 
                         <button
-                          onClick={() => handleDelete(m.id)}
+                          onClick={() => setDeleteUnitTarget({
+                            materialId: m.id,
+                            materialTitle: m.title,
+                            subjectCode: m.subject,
+                            linkedMaterialIds: m.ids,
+                            branches: m.branches,
+                            currentBranch: m.branch,
+                          })}
                           className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-full border border-red-200 cursor-pointer transition-all"
                           title="Delete material"
                         >
@@ -1410,7 +1536,13 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                           Attached Study Files ({m.material_files?.length || 0}):
                         </span>
                         <button
-                          onClick={() => setAttachTarget({ materialId: m.id, materialTitle: m.title })}
+                          onClick={() => setAttachTarget({ 
+                            materialId: m.id, 
+                            materialTitle: m.title,
+                            linkedMaterialIds: m.ids,
+                            branches: m.branches,
+                            currentBranch: m.branch,
+                          })}
                           className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
                         >
                           <Plus className="h-3 w-3" />
@@ -1476,11 +1608,31 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                                         materialId: m.id,
                                         fileId: file.id,
                                         fileName: file.file_name,
+                                        linkedMaterialIds: m.ids,
+                                        branches: m.branches,
+                                        currentBranch: m.branch,
                                       })}
                                       className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-full border border-slate-200 flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
                                     >
                                       <RefreshCw className="h-3 w-3 text-amber-600" />
                                       <span>New Version</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => setDeleteFileTarget({
+                                        materialId: m.id,
+                                        fileId: file.id,
+                                        fileName: file.file_name,
+                                        storageRef: file.storage_ref,
+                                        linkedMaterialIds: m.ids,
+                                        branches: m.branches,
+                                        currentBranch: m.branch,
+                                      })}
+                                      className="px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 hover:text-red-700 text-xs font-semibold rounded-full border border-red-200 flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                      title="Delete study file"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                      <span>Delete</span>
                                     </button>
                                   </div>
                                 </div>
@@ -1596,6 +1748,9 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
         <AttachFileDialog
           materialId={attachTarget.materialId}
           materialTitle={attachTarget.materialTitle}
+          linkedMaterialIds={attachTarget.linkedMaterialIds}
+          branches={attachTarget.branches}
+          currentBranch={attachTarget.currentBranch}
           onClose={() => setAttachTarget(null)}
         />
       )}
@@ -1606,7 +1761,37 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
           materialId={replaceTarget.materialId}
           fileId={replaceTarget.fileId}
           fileName={replaceTarget.fileName}
+          linkedMaterialIds={replaceTarget.linkedMaterialIds}
+          branches={replaceTarget.branches}
+          currentBranch={replaceTarget.currentBranch}
           onClose={() => setReplaceTarget(null)}
+        />
+      )}
+
+      {/* Render Delete File Dialog */}
+      {deleteFileTarget && (
+        <DeleteFileDialog
+          materialId={deleteFileTarget.materialId}
+          fileId={deleteFileTarget.fileId}
+          fileName={deleteFileTarget.fileName}
+          storageRef={deleteFileTarget.storageRef}
+          linkedMaterialIds={deleteFileTarget.linkedMaterialIds}
+          branches={deleteFileTarget.branches}
+          currentBranch={deleteFileTarget.currentBranch}
+          onClose={() => setDeleteFileTarget(null)}
+        />
+      )}
+
+      {/* Render Delete Unit Dialog */}
+      {deleteUnitTarget && (
+        <DeleteUnitDialog
+          materialId={deleteUnitTarget.materialId}
+          materialTitle={deleteUnitTarget.materialTitle}
+          subjectCode={deleteUnitTarget.subjectCode}
+          linkedMaterialIds={deleteUnitTarget.linkedMaterialIds}
+          branches={deleteUnitTarget.branches}
+          currentBranch={deleteUnitTarget.currentBranch}
+          onClose={() => setDeleteUnitTarget(null)}
         />
       )}
 
@@ -1635,23 +1820,23 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
             }`}
           />
 
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-12 z-50">
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-6 md:pl-10 z-50">
             <div 
-              className={`w-screen max-w-2xl sm:max-w-3xl lg:max-w-4xl bg-white shadow-2xl flex flex-col border-l border-slate-200 transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overscroll-contain ${
+              className={`w-screen max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl bg-white shadow-2xl flex flex-col border-l border-slate-200 transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overscroll-contain ${
                 isDrawerVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
               }`}
             >
               {/* Drawer Header */}
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-2xl bg-blue-50 text-blue-700 border border-blue-200">
+              <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50 shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="p-2 rounded-2xl bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
                     <GraduationCap className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                    <h2 className="text-sm sm:text-lg font-bold text-slate-900 leading-tight">
                       Student Cohort Progress Matrix
                     </h2>
-                    <p className="text-xs text-slate-500 font-normal">
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-normal">
                       Real-time class engagement analytics and per-file audit trails.
                     </p>
                   </div>
@@ -1660,7 +1845,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                 <button
                   type="button"
                   onClick={closeInspectModal}
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer"
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer shrink-0"
                   title="Close Window"
                 >
                   <X className="h-5 w-5" />
@@ -1672,7 +1857,7 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                 ref={scrollContainerRef}
                 tabIndex={0}
                 onWheel={handleScrollWheel}
-                className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 focus:outline-none"
+                className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 focus:outline-none"
                 style={{
                   overscrollBehavior: "contain",
                   touchAction: "pan-y",
@@ -1681,7 +1866,9 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                 <StudentCohortProgressMatrix
                   materialId={inspectingMaterial.id}
                   materialTitle={inspectingMaterial.title}
-                  branch={inspectingMaterial.branch || "CIC"}
+                  branch={inspectingMaterial.branches ? inspectingMaterial.branches.join(", ") : inspectingMaterial.branch || "CIC"}
+                  branches={inspectingMaterial.branches}
+                  linkedMaterialIds={inspectingMaterial.ids}
                   semester={inspectingMaterial.semester || 3}
                   files={inspectingMaterial.material_files || []}
                   activityLogs={inspectingMaterial.engagementLogs || []}
@@ -1692,14 +1879,14 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
               </div>
 
               {/* Drawer Footer */}
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
                 <span className="text-xs text-slate-500 font-normal">
-                  Total Tracked Events: <strong className="text-slate-900 font-semibold">{inspectingMaterial.engagementLogs?.length || 0}</strong>
+                  Verified Engagement: <strong className="text-slate-900 font-semibold">{inspectingMaterial.views || 0} Viewed</strong> • <strong className="text-slate-900 font-semibold">{inspectingMaterial.downloads || 0} Downloaded</strong>
                 </span>
                 <button
                   type="button"
                   onClick={closeInspectModal}
-                  className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm rounded-full shadow-xs cursor-pointer"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm rounded-full shadow-xs cursor-pointer whitespace-nowrap"
                 >
                   Close Window
                 </button>

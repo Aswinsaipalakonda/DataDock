@@ -9,6 +9,7 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import BottomNav from "@/components/bottom-nav";
 import NotificationBell from "@/components/notification-bell";
 import GlobalSearch from "@/components/global-search";
+import AdminMobileNav from "@/components/admin-mobile-nav";
 import { ShieldCheck } from "lucide-react";
 
 export default async function AdminLayout({
@@ -69,12 +70,19 @@ export default async function AdminLayout({
             {/* Clean Admin Role Badge */}
             <Link
               href="/admin/profile"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-slate-900 text-white shadow-2xs hover:bg-slate-800 transition-all cursor-pointer"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-slate-900 text-white shadow-2xs hover:bg-slate-800 transition-all cursor-pointer"
               title="Admin Profile"
             >
               <ShieldCheck className="h-3.5 w-3.5 text-blue-400 shrink-0" />
               <span>System Administrator</span>
             </Link>
+
+            {/* Mobile Navigation Drawer Trigger */}
+            <AdminMobileNav
+              signOutAction={handleSignOut}
+              userEmail={user.email}
+              userName={profile?.name || "Administrator"}
+            />
           </div>
         </header>
 

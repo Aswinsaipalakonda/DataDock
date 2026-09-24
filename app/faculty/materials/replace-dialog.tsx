@@ -9,10 +9,23 @@ interface ReplaceDialogProps {
   materialId: string;
   fileId: string;
   fileName: string;
+  linkedMaterialIds?: string[];
+  branches?: string[];
+  currentBranch?: string;
   onClose: () => void;
 }
 
-export default function ReplaceDialog({ materialId, fileId, fileName, onClose }: ReplaceDialogProps) {
+export default function ReplaceDialog({
+  materialId,
+  fileId,
+  fileName,
+  linkedMaterialIds = [],
+  branches = [],
+  currentBranch,
+  onClose,
+}: ReplaceDialogProps) {
+  const isMultiBranch = branches.length > 1 && linkedMaterialIds.length > 1;
+  const [scope, setScope] = useState<"all" | "single">("all");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +61,10 @@ export default function ReplaceDialog({ materialId, fileId, fileName, onClose }:
       formData.append("materialId", materialId);
       formData.append("fileId", fileId);
       formData.append("file", file);
+
+      if (isMultiBranch && scope === "all") {
+        formData.append("linkedMaterialIds", JSON.stringify(linkedMaterialIds));
+      }
 
       const result = await replaceFileVersion(formData);
       if (result.error) {
@@ -120,6 +137,41 @@ export default function ReplaceDialog({ materialId, fileId, fileName, onClose }:
               </div>
             )}
           </div>
+
+          {isMultiBranch && (
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
+              <span className="text-xs font-bold text-slate-800 block">
+                Target Sections / Branches:
+              </span>
+              <p className="text-[11px] text-slate-500 font-normal">
+                This unit is shared across {branches.join(", ")}. Select which sections should receive this replacement file:
+              </p>
+              <div className="space-y-1.5 pt-1">
+                <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer p-1.5 rounded-xl hover:bg-white transition-colors">
+                  <input
+                    type="radio"
+                    name="replaceScope"
+                    value="all"
+                    checked={scope === "all"}
+                    onChange={() => setScope("all")}
+                    className="accent-primary"
+                  />
+                  <span className="font-semibold">All linked sections ({branches.join(", ")})</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-slate-800 cursor-pointer p-1.5 rounded-xl hover:bg-white transition-colors">
+                  <input
+                    type="radio"
+                    name="replaceScope"
+                    value="single"
+                    checked={scope === "single"}
+                    onChange={() => setScope("single")}
+                    className="accent-primary"
+                  />
+                  <span>Only this section ({currentBranch || branches[0]})</span>
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2.5">
             <button

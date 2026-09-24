@@ -177,7 +177,7 @@ export default async function FacultyMaterialsPage() {
       return true;
     });
 
-    // Count distinct students who viewed this material
+    // Count distinct students who viewed this material (strictly 1 count per student)
     const uniqueStudentViewers = new Set(
       validStudentEvents
         .filter((e) => e.type === "view")
@@ -198,10 +198,53 @@ export default async function FacultyMaterialsPage() {
         .filter(Boolean)
     );
 
-    const views = uniqueStudentViewers.size;
-    const downloads = validStudentEvents.filter((e) => e.type === "download").length;
+    // Count distinct students who downloaded this material (strictly 1 count per student)
+    const uniqueStudentDownloaders = new Set(
+      validStudentEvents
+        .filter((e) => e.type === "download")
+        .map((ev) => {
+          const userProfile = 
+            (ev.users as Record<string, unknown>) || 
+            (ev.actor_id ? userMap.get(String(ev.actor_id)) : null) ||
+            (ev.actor_email ? userMap.get(String(ev.actor_email).toLowerCase()) : null);
+          const userEmail = (userProfile?.email as string) || ev.actor_email || ev.metadata?.email || "";
+          return (
+            (userProfile?.roll_number as string) || 
+            ev.actor_roll || 
+            ev.metadata?.roll_number || 
+            (userEmail.includes("@") ? userEmail.split("@")[0].toUpperCase() : "") ||
+            ev.actor_id
+          );
+        })
+        .filter(Boolean)
+    );
 
-    const engagementLogs: StudentEngagementLog[] = validStudentEvents.map((ev, idx) => {
+    const views = uniqueStudentViewers.size;
+    const downloads = uniqueStudentDownloaders.size;
+
+    // Deduplicate valid student events by (roll, action, file) keeping latest event
+    const distinctEventsMap = new Map<string, any>();
+    validStudentEvents.forEach((ev) => {
+      const userProfile = 
+        (ev.users as Record<string, unknown>) || 
+        (ev.actor_id ? userMap.get(String(ev.actor_id)) : null) ||
+        (ev.actor_email ? userMap.get(String(ev.actor_email).toLowerCase()) : null);
+
+      const userEmail = ((userProfile?.email as string) || ev.actor_email || ev.metadata?.email || "").toLowerCase();
+      const roll = (userProfile?.roll_number as string) || ev.actor_roll || ev.metadata?.roll_number || (userEmail.includes("@") ? userEmail.split("@")[0].toUpperCase() : "");
+      if (!roll) return;
+
+      const fileName = ev.file_name || ev.metadata?.file_name || "material_workspace";
+      const key = `${roll.toUpperCase()}__${ev.type}__${fileName}`;
+
+      if (!distinctEventsMap.has(key)) {
+        distinctEventsMap.set(key, ev);
+      }
+    });
+
+    const distinctEvents = Array.from(distinctEventsMap.values());
+
+    const engagementLogs: StudentEngagementLog[] = distinctEvents.map((ev, idx) => {
       const userProfile = 
         (ev.users as Record<string, unknown>) || 
         (ev.actor_id ? userMap.get(String(ev.actor_id)) : null) ||

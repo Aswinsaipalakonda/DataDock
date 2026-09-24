@@ -37,23 +37,91 @@ export async function toggleMaterialState(id: string, newState: "draft" | "publi
   return { success: true };
 }
 
-// Soft Delete a Material
-export async function deleteMaterial(id: string) {
+// Soft Delete a Material (supports multi-branch linked IDs)
+export async function deleteMaterial(id: string, linkedIds?: string[]) {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
-  const { error } = await supabase
-    .from("materials")
-    .update({ state: "deleted" })
-    .eq("id", id)
-    .eq("owner_id", user.id);
+  const idsToDelete = Array.from(new Set([id, ...(linkedIds || [])]));
 
-  if (error) return { error: error.message };
+  for (const matId of idsToDelete) {
+    await supabase
+      .from("materials")
+      .update({ state: "deleted" })
+      .eq("id", matId)
+      .eq("owner_id", user.id);
+  }
 
   revalidateMaterialCaches(id);
+  return { success: true };
+}
+
+// Delete a Specific Attached Study File
+export async function deleteMaterialFile(
+  materialId: string,
+  fileId: string,
+  storageRef?: string,
+  linkedMaterialIds?: string[]
+) {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  // Fetch the target file record
+  const { data: fileRecord } = await supabase
+    .from("material_files")
+    .select("id, file_name, storage_ref, storage_path, material_id")
+    .eq("id", fileId)
+    .single();
+
+  if (!fileRecord) {
+    return { error: "File record not found." };
+  }
+
+  // Delete target file from database
+  await supabase
+    .from("material_files")
+    .delete()
+    .eq("id", fileId);
+
+  // If storage reference is present, physically remove the file
+  const ref = storageRef || fileRecord.storage_path || fileRecord.storage_ref;
+  if (ref) {
+    try {
+      await supabase.storage.from("materials").remove([ref]);
+    } catch (e) {
+      console.warn("Storage deletion notice:", e);
+    }
+  }
+
+  // If requested to delete across all linked branches
+  if (linkedMaterialIds && linkedMaterialIds.length > 0) {
+    for (const linkedId of linkedMaterialIds) {
+      if (linkedId === materialId) continue;
+      const { data: siblingFiles } = await supabase
+        .from("material_files")
+        .select("id, storage_ref, storage_path")
+        .eq("material_id", linkedId)
+        .eq("file_name", fileRecord.file_name);
+
+      if (siblingFiles && siblingFiles.length > 0) {
+        for (const sf of siblingFiles) {
+          await supabase.from("material_files").delete().eq("id", sf.id);
+          const sRef = sf.storage_path || sf.storage_ref;
+          if (sRef && sRef !== ref) {
+            try { await supabase.storage.from("materials").remove([sRef]); } catch {}
+          }
+        }
+      }
+    }
+  }
+
+  revalidateMaterialCaches(materialId);
   return { success: true };
 }
 
@@ -195,6 +263,36 @@ export async function attachFileToMaterial(formData: FormData) {
     return { error: `Failed to register file: ${fileInsertError.message}` };
   }
 
+  // If requested to sync attached file across all linked branches
+  const linkedIdsRaw = formData.get("linkedMaterialIds") as string;
+  let linkedMaterialIds: string[] = [];
+  if (linkedIdsRaw) {
+    try { linkedMaterialIds = JSON.parse(linkedIdsRaw); } catch {}
+  }
+
+  if (linkedMaterialIds && linkedMaterialIds.length > 0) {
+    for (const linkedId of linkedMaterialIds) {
+      if (linkedId === materialId) continue;
+      try {
+        await supabase
+          .from("material_files")
+          .insert({
+            id: crypto.randomUUID(),
+            material_id: linkedId,
+            file_name: file.name,
+            mime_type: file.type || "application/octet-stream",
+            size: file.size,
+            version: 1,
+            storage_path: storageRef,
+            storage_ref: storageRef,
+          });
+        revalidateMaterialCaches(linkedId);
+      } catch (err) {
+        console.warn("Linked material file attach notice:", err);
+      }
+    }
+  }
+
   revalidateMaterialCaches(materialId);
   return { success: true };
 }
@@ -269,6 +367,36 @@ export async function replaceFileVersion(formData: FormData) {
 
   if (fileInsertError) {
     return { error: `Failed to register version ${nextVersion}: ${fileInsertError.message}` };
+  }
+
+  // If requested to sync new version across all linked branches
+  const linkedIdsRaw = formData.get("linkedMaterialIds") as string;
+  let linkedMaterialIds: string[] = [];
+  if (linkedIdsRaw) {
+    try { linkedMaterialIds = JSON.parse(linkedIdsRaw); } catch {}
+  }
+
+  if (linkedMaterialIds && linkedMaterialIds.length > 0) {
+    for (const linkedId of linkedMaterialIds) {
+      if (linkedId === materialId) continue;
+      try {
+        await supabase
+          .from("material_files")
+          .insert({
+            id: crypto.randomUUID(),
+            material_id: linkedId,
+            file_name: file.name,
+            mime_type: file.type || "application/octet-stream",
+            size: file.size,
+            version: nextVersion,
+            storage_path: storageRef,
+            storage_ref: storageRef,
+          });
+        revalidateMaterialCaches(linkedId);
+      } catch (err) {
+        console.warn("Linked material file update notice:", err);
+      }
+    }
   }
 
   revalidateMaterialCaches(materialId);
