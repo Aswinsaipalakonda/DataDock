@@ -98,15 +98,16 @@ export default function ProfileClient({ profile }: ProfileClientProps) {
         </div>
 
         <div className="pt-6 border-t border-border">
-          <form action={signOutUserAction} className="w-full">
-            <button
-              type="submit"
-              className="w-full px-4 py-2.5 bg-danger/10 hover:bg-danger text-danger hover:text-white font-bold text-xs rounded-full border border-danger/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Sign Out Account</span>
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/api/auth/logout";
+            }}
+            className="w-full px-4 py-2.5 bg-danger/10 hover:bg-danger text-danger hover:text-white font-bold text-xs rounded-full border border-danger/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Sign Out Account</span>
+          </button>
         </div>
       </div>
 

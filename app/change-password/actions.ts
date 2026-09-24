@@ -27,6 +27,13 @@ export async function changePassword(formData: FormData) {
 
   // Derive registration number to prevent password matching it
   const regNo = (user.email || "").split("@")[0].toUpperCase();
+  const ROLL_PATTERN_REGEX = /(^|[^0-9A-Z])\d{4}[A-Z]\d{4}([^0-9A-Z]|$)/i;
+
+  if (ROLL_PATTERN_REGEX.test(password) || password.toUpperCase() === regNo) {
+    return {
+      error: "New password cannot be a college registration number or match the default roll number pattern.",
+    };
+  }
 
   // Run server-side validations
   const hasMinLength = password.length >= 8;
@@ -34,17 +41,9 @@ export async function changePassword(formData: FormData) {
   const hasLowercase = /[a-z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
   const hasSpecialChar = /[^A-Za-z0-9]/.test(password);
-  const isNotRegNo = password.toUpperCase() !== regNo;
 
-  if (
-    !hasMinLength ||
-    !hasUppercase ||
-    !hasLowercase ||
-    !hasNumber ||
-    !hasSpecialChar ||
-    !isNotRegNo
-  ) {
-    return { error: "Password does not meet the complexity requirements." };
+  if (!hasMinLength || !hasUppercase || !hasLowercase || !hasNumber || !hasSpecialChar) {
+    return { error: "Password must be at least 8 characters and include uppercase, lowercase, numbers, and symbols." };
   }
 
   // Update password in Supabase Auth

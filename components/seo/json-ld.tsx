@@ -7,7 +7,7 @@ export interface JsonLdProps {
 
 export function StructuredData({
   primaryDomain = "https://datadock.aswinsai.tech",
-  alternateDomain = "https://de-mvgrce.vercel.app",
+  alternateDomain,
 }: JsonLdProps) {
   // 1. WebSite Schema with Sitelinks SearchBox Action
   const websiteSchema = {
@@ -51,8 +51,8 @@ export function StructuredData({
     },
     sameAs: [
       "https://www.mvgrce.edu.in",
-      alternateDomain,
       "https://aswinsai.tech/",
+      ...(alternateDomain ? [alternateDomain] : []),
     ],
     address: {
       "@type": "PostalAddress",

@@ -35,8 +35,8 @@ export async function login(formData: FormData) {
       clientIp = rawIp.replace(/[^a-zA-Z0-9.:_-]/g, "");
 
       const ipCheck = checkRateLimit(`ip:${clientIp}`, {
-        maxAttempts: 25,
-        windowMs: 5 * 60 * 1000,
+        maxAttempts: 20,
+        windowMs: 15 * 60 * 1000,
       });
       if (!ipCheck.allowed) {
         return {
@@ -45,8 +45,8 @@ export async function login(formData: FormData) {
       }
 
       const emailCheck = checkRateLimit(`email:${email}`, {
-        maxAttempts: 10,
-        windowMs: 5 * 60 * 1000,
+        maxAttempts: 5,
+        windowMs: 15 * 60 * 1000,
       });
       if (!emailCheck.allowed) {
         return {

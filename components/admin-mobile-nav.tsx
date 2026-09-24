@@ -281,7 +281,7 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
                 style={{ backgroundColor: "#080c14" }}
                 className="p-4 border-t border-slate-800/90 space-y-2.5 shrink-0"
               >
-                <form action={signOutAction}>
+                <form action="/api/auth/logout" method="GET">
                   <button
                     type="submit"
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/25 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-[0.98]"

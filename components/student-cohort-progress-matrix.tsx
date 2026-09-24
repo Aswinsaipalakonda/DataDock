@@ -255,9 +255,31 @@ export default function StudentCohortProgressMatrix({
         const normTarget = normalizeFileName(f.file_name);
 
         const fileEvents = studentEvents.filter((e) => {
-          if (!e.fileName) return false;
-          const normEv = normalizeFileName(e.fileName);
-          return normEv === normTarget || normEv.includes(normTarget) || normTarget.includes(normEv);
+          // If there's only 1 file in the material, all file-level events match it
+          if (normalizedFiles.length === 1 && (e.action === "download" || (e.action === "view" && e.actionDetail && e.actionDetail !== "Viewed Material Workspace"))) {
+            return true;
+          }
+
+          // Try direct fileName match
+          if (e.fileName) {
+            const normEv = normalizeFileName(e.fileName);
+            if (normEv === normTarget || normEv.includes(normTarget) || normTarget.includes(normEv)) {
+              return true;
+            }
+          }
+
+          // Fallback: extract file name from actionDetail (e.g. "Previewed: image-Photoroom.png" or "Downloaded: file.pdf")
+          if (e.actionDetail) {
+            const detailMatch = e.actionDetail.match(/(?:Previewed|Downloaded|Viewed):\s*(.+)/i);
+            if (detailMatch && detailMatch[1]) {
+              const normDetail = normalizeFileName(detailMatch[1].trim());
+              if (normDetail === normTarget || normDetail.includes(normTarget) || normTarget.includes(normDetail)) {
+                return true;
+              }
+            }
+          }
+
+          return false;
         });
 
         // Separate and sort view and download events descending (newest first)

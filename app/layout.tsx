@@ -4,7 +4,6 @@ import SmoothScroll from "@/components/smooth-scroll";
 import { StructuredData } from "@/components/seo/json-ld";
 
 const PRIMARY_URL = "https://datadock.aswinsai.tech";
-const ALIAS_URL = "https://de-mvgrce.vercel.app";
 
 export const viewport: Viewport = {
   themeColor: "#0B1F3B",
@@ -26,14 +25,12 @@ export const metadata: Metadata = {
     { name: "Department of Data Engineering, MVGRCE" },
     { name: "Aswinsai", url: "https://aswinsai.tech/" },
   ],
-  generator: "Next.js",
   keywords: [
     // Brand & Core
     "DataDock",
     "DataDock MVGR",
     "datadock aswinsai",
     "datadock.aswinsai.tech",
-    "de-mvgrce.vercel.app",
     "MVGR DE E-Learn",
     "MVGR Data Engineering",
     "Data Engineering Portal",
@@ -138,7 +135,6 @@ export const metadata: Metadata = {
   category: "Education",
   classification: "Academic Learning Management & Study Materials Repository",
   other: {
-    "google-site-verification": "b5F-JitCRAjHY1M5hW_fntc_oOK9kx4H3i0eKFVpi6Y",
     "ai-content-declaration": "curated-academic-learning-materials",
     "subject": "Data Engineering Academic Resources & Syllabus",
     "coverage": "MVGR College of Engineering, Vizianagaram, Andhra Pradesh, India",
@@ -166,22 +162,16 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
-        {/* Explicit Google Site Verification Meta Tag */}
-        <meta
-          name="google-site-verification"
-          content="b5F-JitCRAjHY1M5hW_fntc_oOK9kx4H3i0eKFVpi6Y"
-        />
         {/* Fontshare Satoshi typography */}
         <link rel="preconnect" href="https://api.fontshare.com" />
         <link
           href="https://api.fontshare.com/v2/css?f[]=satoshi@900,800,700,600,500,400,300&display=swap"
           rel="stylesheet"
         />
-        {/* Primary and Alternate Links */}
+        {/* Primary Canonical Link */}
         <link rel="canonical" href={PRIMARY_URL} />
-        <link rel="alternate" href={ALIAS_URL} hrefLang="x-default" />
         {/* Structured Data (Schema.org JSON-LD for Google Sitelinks) */}
-        <StructuredData primaryDomain={PRIMARY_URL} alternateDomain={ALIAS_URL} />
+        <StructuredData primaryDomain={PRIMARY_URL} />
       </head>
       <body className="min-h-full flex flex-col font-sans bg-[#F8FAFC]" suppressHydrationWarning>
         <SmoothScroll>{children}</SmoothScroll>

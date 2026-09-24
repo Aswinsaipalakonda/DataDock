@@ -59,10 +59,10 @@ function getMimeTypeByExt(ext: string, fallbackMime?: string): string {
 
 export async function GET(
   request: NextRequest,
-  props: { params: Promise<{ path: string[] }> }
+  context: { params: Promise<any> }
 ) {
   try {
-    const params = await props.params;
+    const params = await context.params;
     let segments = params.path || [];
 
     if (segments.length === 0) {

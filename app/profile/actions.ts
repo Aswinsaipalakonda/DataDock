@@ -60,6 +60,14 @@ export async function updatePasswordAction(password: string) {
 export async function signOutUserAction() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
-  await supabase.auth.signOut();
+  try {
+    await supabase.auth.signOut();
+  } catch {}
+  cookieStore.set("de_token", "", { maxAge: 0, path: "/", expires: new Date(0) });
+  cookieStore.delete("de_token");
+  cookieStore.set("__Secure-session", "", { maxAge: 0, path: "/", expires: new Date(0) });
+  cookieStore.delete("__Secure-session");
+  cookieStore.set("__Host-session", "", { maxAge: 0, path: "/", expires: new Date(0) });
+  cookieStore.delete("__Host-session");
   redirect("/login");
 }

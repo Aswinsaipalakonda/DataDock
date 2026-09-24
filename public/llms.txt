@@ -4,7 +4,6 @@
 
 ## Primary Canonical URL
 - Website: https://datadock.aswinsai.tech
-- Alias Mirror: https://de-mvgrce.vercel.app
 
 ## Overview & Purpose
 DataDock provides students and faculty with verified, peer-reviewed academic learning materials, autonomous regulation course syllabi (Semesters 1 to 8), previous year question papers, lab manuals, and mid-examination question banks for undergraduate B.Tech programs.

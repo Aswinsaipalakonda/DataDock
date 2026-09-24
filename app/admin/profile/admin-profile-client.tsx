@@ -142,15 +142,16 @@ export default function AdminProfileClient({ profile }: AdminProfileClientProps)
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-            <form action={signOutUserAction}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out Session</span>
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/api/auth/logout";
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out Session</span>
+            </button>
           </div>
         </div>
       </div>

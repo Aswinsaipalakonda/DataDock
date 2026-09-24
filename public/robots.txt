@@ -1,0 +1,29 @@
+User-Agent: *
+Allow: /
+Allow: /about
+Allow: /contact
+Allow: /login
+Allow: /terms
+Allow: /privacy
+Allow: /llms.txt
+Allow: /llms-full.txt
+Crawl-Delay: 10
+
+User-Agent: GPTBot
+User-Agent: ChatGPT-User
+User-Agent: ClaudeBot
+User-Agent: PerplexityBot
+User-Agent: Google-Extended
+User-Agent: Applebot-Extended
+User-Agent: Bytespider
+User-Agent: cohere-ai
+Allow: /
+Allow: /about
+Allow: /contact
+Allow: /terms
+Allow: /privacy
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+Host: https://datadock.aswinsai.tech
+Sitemap: https://datadock.aswinsai.tech/sitemap.xml

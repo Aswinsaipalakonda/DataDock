@@ -1,0 +1,52 @@
+# ---------- DataDock Security Hardening ----------
+ServerSignature Off
+TraceEnable Off
+FileETag None
+Header unset ETag
+Header unset X-Powered-By
+Header unset platform
+Header unset panel
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(), usb=(), bluetooth=()"
+Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+Header always set X-XSS-Protection "1; mode=block"
+Header always set X-Download-Options "noopen"
+Header always set X-Permitted-Cross-Domain-Policies "none"
+Header onsuccess unset Content-Security-Policy
+Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests; script-src 'self' 'unsafe-inline' https://cdn.fontshare.com; style-src 'self' 'unsafe-inline' https://cdn.fontshare.com https://api.fontshare.com; font-src 'self' https://cdn.fontshare.com https://api.fontshare.com data:; img-src 'self' https: data: blob:; connect-src 'self' https: wss:; object-src 'none'; worker-src 'self' blob:; frame-src 'none'; manifest-src 'self'; report-uri /api/csp-report"
+
+# ---------- Method allowlist + block TRACE/TRACK/DEBUG ----------
+<LimitExcept GET HEAD POST>
+  Require all denied
+</LimitExcept>
+<Limit TRACE TRACK DEBUG CONNECT>
+  Require all denied
+</Limit>
+
+# ---------- Force HTTPS + canonical host ----------
+RewriteEngine On
+RewriteCond %{HTTPS} off [OR]
+RewriteCond %{HTTP_HOST} ^www\. [NC]
+RewriteRule ^ https://datadock.aswinsai.tech%{REQUEST_URI} [R=301,L]
+
+# ---------- Path normalization: collapse x/../ to / ----------
+RewriteRule ^(assets|static|public|_next)/\.\./.*$ / [R=308,L]
+
+# ---------- Serve .well-known/security.txt correctly ----------
+RewriteRule ^\.well-known/security\.txt$ /.well-known/security.txt [L]
+
+# ---------- Cache immutable for Next fingerprinted static ----------
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/x-icon "access plus 7 days"
+  ExpiresByType application/manifest+json "access plus 1 hour"
+  <FilesMatch "^_next/static/.*">
+    ExpiresDefault "access plus 1 year"
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# ---------- No directory listings ----------
+Options -Indexes -MultiViews

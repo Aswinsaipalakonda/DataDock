@@ -264,7 +264,15 @@ export default async function FacultyMaterialsPage() {
         (roll ? `Student (${roll})` : "Enrolled Student");
 
       let actionDetail = ev.action_detail || "Viewed Material Workspace";
-      const fileName = ev.file_name || ev.metadata?.file_name;
+      let fileName = ev.file_name || ev.metadata?.file_name;
+
+      // Fallback: extract fileName from action_detail (server events store it as "Previewed: filename.ext")
+      if (!fileName && ev.action_detail) {
+        const detailMatch = ev.action_detail.match(/(?:Previewed|Downloaded|Viewed):\s*(.+)/i);
+        if (detailMatch && detailMatch[1]) {
+          fileName = detailMatch[1].trim();
+        }
+      }
 
       if (ev.type === "download") {
         actionDetail = fileName ? `Downloaded: ${fileName}` : "Downloaded Study File";

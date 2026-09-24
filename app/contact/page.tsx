@@ -39,6 +39,7 @@ export default function ContactPage() {
     role: "Student",
     subject: "",
     message: "",
+    website: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,6 +53,7 @@ export default function ContactPage() {
       role: formData.role,
       subject: formData.subject,
       message: formData.message,
+      website: formData.website,
     });
 
     setIsSubmitting(false);
@@ -71,6 +73,7 @@ export default function ContactPage() {
         role: "Student",
         subject: "",
         message: "",
+        website: "",
       });
     }
   };
@@ -227,6 +230,17 @@ export default function ContactPage() {
           {/* Right: Interactive Support Form (7 cols) */}
           <div className="lg:col-span-7 bg-white p-8 sm:p-10 rounded-3xl border border-slate-200 shadow-xs">
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Bot prevention honeypot field */}
+              <input
+                type="text"
+                name="website"
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                tabIndex={-1}
+                autoComplete="off"
+                className="opacity-0 absolute -z-10 h-0 w-0 pointer-events-none"
+                aria-hidden="true"
+              />
               <div>
                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-blue-600" />

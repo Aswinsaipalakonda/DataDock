@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,6 +32,7 @@ interface SidebarProps {
 
 export default function Sidebar({ userRole, userScope, signOutAction }: SidebarProps) {
   const pathname = usePathname();
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const navigation = {
     student: [
@@ -140,12 +142,23 @@ export default function Sidebar({ userRole, userScope, signOutAction }: SidebarP
       {/* User Signout Footer */}
       <div className="p-3.5 border-t border-slate-800/80 bg-slate-900/30">
         <button
-          onClick={() => signOutAction()}
+          type="button"
+          onClick={async () => {
+            try {
+              setIsSigningOut(true);
+              if (signOutAction) await signOutAction();
+            } catch {
+              // Ignore action redirect error
+            } finally {
+              window.location.href = "/api/auth/logout";
+            }
+          }}
+          disabled={isSigningOut}
           suppressHydrationWarning
-          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-2xl transition-all duration-200 cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-2xl transition-all duration-200 cursor-pointer disabled:opacity-50"
         >
           <LogOut className="h-4 w-4" />
-          <span>Sign Out</span>
+          <span>{isSigningOut ? "Signing Out..." : "Sign Out"}</span>
         </button>
       </div>
     </aside>

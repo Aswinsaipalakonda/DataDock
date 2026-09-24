@@ -23,7 +23,6 @@ DataDock (https://datadock.aswinsai.tech) is the digital academic infrastructure
 
 ## Direct URLs
 - Primary: https://datadock.aswinsai.tech
-- Alias: https://de-mvgrce.vercel.app
 - About: https://datadock.aswinsai.tech/about
 - Support: https://datadock.aswinsai.tech/contact
 - Terms of Use: https://datadock.aswinsai.tech/terms

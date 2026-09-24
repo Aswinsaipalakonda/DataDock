@@ -40,6 +40,15 @@ export default function LoginPage() {
         {/* Form Inputs & Actions */}
         <LoginForm />
 
+        {/* Student Onboarding Default Credential Hint & Security Advisory */}
+        <div className="pt-4 border-t border-slate-100 text-center space-y-2">
+          <p className="text-xs text-slate-600 font-medium">
+            For students: Your initial password is your registration number.
+          </p>
+          <p className="text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/80 rounded-xl p-2 font-normal leading-relaxed text-left">
+            ⚠️ For your account safety, you can update your password anytime in your profile workspace.
+          </p>
+        </div>
 
       </div>
     </main>

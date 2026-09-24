@@ -706,6 +706,7 @@ export class MySQLClient {
                   branch: u.branch,
                   current_semester: u.current_semester,
                   section: u.section,
+                  roll_number: u.roll_number,
                 },
                 app_metadata: { role: u.role },
                 role: u.role,
@@ -850,9 +851,18 @@ export class MySQLClient {
       },
 
       signOut: async () => {
-        if (this.cookieStore?.delete) {
-          this.cookieStore.delete('de_token');
-        }
+        try {
+          if (this.cookieStore?.set) {
+            this.cookieStore.set('de_token', '', { maxAge: 0, path: '/', expires: new Date(0) });
+            this.cookieStore.set('__Secure-session', '', { maxAge: 0, path: '/', expires: new Date(0) });
+            this.cookieStore.set('__Host-session', '', { maxAge: 0, path: '/', expires: new Date(0) });
+          }
+          if (this.cookieStore?.delete) {
+            this.cookieStore.delete('de_token');
+            this.cookieStore.delete('__Secure-session');
+            this.cookieStore.delete('__Host-session');
+          }
+        } catch {}
         return { error: null as { message: string } | null };
       },
 

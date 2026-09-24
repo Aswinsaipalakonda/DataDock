@@ -8,19 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: ["/", "/about", "/contact", "/login", "/terms", "/privacy", "/llms.txt", "/llms-full.txt"],
-        disallow: [
-          "/admin/",
-          "/admin/*",
-          "/faculty/",
-          "/faculty/*",
-          "/student/",
-          "/student/*",
-          "/api/",
-          "/change-password",
-          "/profile",
-        ],
       },
-      // Explicit access for AI LLM Search & Retrieval Bots (GEO - Generative Engine Optimization)
       {
         userAgent: [
           "GPTBot",
@@ -33,7 +21,6 @@ export default function robots(): MetadataRoute.Robots {
           "cohere-ai",
         ],
         allow: ["/", "/about", "/contact", "/terms", "/privacy", "/llms.txt", "/llms-full.txt"],
-        disallow: ["/admin/", "/faculty/", "/student/", "/api/"],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

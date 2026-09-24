@@ -1,33 +1,55 @@
-import { type NextRequest, NextResponse } from "next/server";
-
-// Explicit public routes that never require authentication
-const PUBLIC_ROUTES = new Set([
-  "/",
-  "/login",
-  "/about",
-  "/terms",
-  "/privacy",
-  "/contact",
-  "/sitemap.xml",
-  "/robots.txt",
-  "/manifest.webmanifest",
-  "/llms.txt",
-  "/llms-full.txt",
-]);
+import { NextRequest, NextResponse } from "next/server";
 
 // Protected route prefixes that strictly require an active session
 const PROTECTED_PREFIXES = [
-  "/student",
-  "/faculty",
   "/admin",
-  "/profile",
+  "/faculty",
+  "/student",
   "/change-password",
+  "/profile",
 ];
 
-// High-speed JWT session parser (0.01ms, no network latency)
+const ALLOWED_METHODS_STATIC = new Set(["GET", "HEAD"]);
+const BANNED_METHODS = new Set(["TRACE", "TRACK", "DEBUG", "CONNECT"]);
+const STATIC_EXT_RE = /\.(?:png|jpe?g|gif|svg|webp|css|js|mjs|woff2?|ttf|otf|ico|pdf|txt|xml|webmanifest)$/i;
+
+/* ---------- In-memory sliding rate limiter bucket ---------- */
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number
+): { allowed: boolean; remaining: number; retryAfterSec: number } {
+  const now = Date.now();
+  let bucket = rateLimitBuckets.get(key);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + windowMs };
+  }
+  bucket.count += 1;
+  rateLimitBuckets.set(key, bucket);
+  const remaining = Math.max(0, limit - bucket.count);
+  const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
+  return { allowed: bucket.count <= limit, remaining, retryAfterSec };
+}
+
+function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    req.headers.get("x-real-ip") ??
+    req.headers.get("cf-connecting-ip") ??
+    "0.0.0.0"
+  );
+}
+
+// High-speed JWT session parser
 function parseDeSession(request: NextRequest): { email: string; role: string; expired: boolean } | null {
   try {
-    const token = request.cookies.get("de_token")?.value;
+    const token =
+      request.cookies.get("de_token")?.value ??
+      request.cookies.get("__Secure-session")?.value ??
+      request.cookies.get("__Host-session")?.value;
+
     if (!token) return null;
 
     const parts = token.split(".");
@@ -53,37 +75,98 @@ function parseDeSession(request: NextRequest): { email: string; role: string; ex
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Skip assets, static files, and API endpoints immediately (0ms overhead)
+  // 1. Skip assets, static files, and dev HMR immediately (0ms overhead)
   if (
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
     pathname.startsWith("/uploads") ||
     pathname.startsWith("/static") ||
-    pathname.includes(".") ||
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
   }
 
+  const method = request.method.toUpperCase();
+
+  // 2. Method-level firewall
+  if (BANNED_METHODS.has(method)) {
+    return new NextResponse(null, { status: 405 });
+  }
+
+  const isApi = pathname.startsWith("/api/");
+  const isLogin = pathname === "/login";
+  const isStaticFile = STATIC_EXT_RE.test(pathname);
+  const isContact = pathname === "/contact" || pathname.startsWith("/api/contact");
+  const ALLOWED_METHODS_PAGES = new Set(["GET", "HEAD", "POST"]);
+
+  if (isStaticFile && !ALLOWED_METHODS_STATIC.has(method)) {
+    return new NextResponse(null, { status: 405 });
+  }
+
+  if (!isApi && !ALLOWED_METHODS_PAGES.has(method)) {
+    return new NextResponse(null, { status: 405 });
+  }
+
+  // 3. Path normalization: strip /assets/../, /static/../
+  if (pathname.match(/\/(assets|static|public|_next)\/\.\./)) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/";
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+
+  // 4. Rate limiting: login, contact, and api
+  const ip = getClientIp(request);
+
+  if (isLogin) {
+    const loginRl = checkRateLimit(`rl:ip:login:${ip}`, 20, 15 * 60 * 1000);
+    if (!loginRl.allowed) {
+      return new NextResponse("Too many login attempts from this network. Please try again later.", {
+        status: 429,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Retry-After": String(loginRl.retryAfterSec),
+        },
+      });
+    }
+  }
+
+  if (isContact && method === "POST") {
+    const contactRl = checkRateLimit(`rl:ip:contact:${ip}`, 5, 60 * 60 * 1000);
+    if (!contactRl.allowed) {
+      return new NextResponse("Too many contact submissions. Please wait before submitting again.", {
+        status: 429,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Retry-After": String(contactRl.retryAfterSec),
+        },
+      });
+    }
+  }
+
+  if (isApi) {
+    const apiRl = checkRateLimit(`rl:ip:api:${ip}`, 180, 60 * 1000);
+    if (!apiRl.allowed) {
+      return new NextResponse(JSON.stringify({ error: "rate_limited" }), {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(apiRl.retryAfterSec),
+        },
+      });
+    }
+  }
+
+  // 5. Auth + Route Enumeration Mitigation
   const isProtectedPath = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
-  const isAuthPath = pathname === "/login";
-  const isRoot = pathname === "/";
-
-  // If not visiting a protected dashboard, login, or root landing, proceed directly
-  if (!isProtectedPath && !isAuthPath && !isRoot) {
-    return NextResponse.next();
-  }
-
-  // 2. Check session token
   const session = parseDeSession(request);
+  const isAuthenticated = session && !session.expired;
 
-  if (session && !session.expired) {
+  if (isAuthenticated) {
     const role = session.role;
 
-    // Logged in user visiting login page or root -> redirect to role dashboard
-    if (isAuthPath || isRoot) {
+    // Logged in user visiting login page -> redirect to role dashboard
+    if (isLogin) {
       return NextResponse.redirect(new URL(`/${role}`, request.url));
     }
 
@@ -94,25 +177,57 @@ export async function proxy(request: NextRequest) {
     if (pathname.startsWith("/faculty") && role === "student") {
       return NextResponse.redirect(new URL("/student", request.url));
     }
+  } else if (isProtectedPath) {
+    // Unauthenticated access:
+    // Human browsers receive a 307 redirect to login
+    // Automated crawlers, scrapers, and RSC probes receive 404
+    const acceptsHtml = request.headers.get("accept")?.includes("text/html");
+    const isRsc = request.headers.get("rsc") === "1";
+    const hasNextHint = request.nextUrl.searchParams.has("protected");
 
-    return NextResponse.next();
+    if ((acceptsHtml && !isRsc) || hasNextHint) {
+      const redirectUrl = new URL("/login", request.url);
+      redirectUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(redirectUrl, 307);
+    }
+
+    return new NextResponse("Not Found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
 
-  // 3. If no valid session and accessing a protected page -> redirect to login
-  if (isProtectedPath) {
-    const redirectUrl = new URL("/login", request.url);
-    redirectUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(redirectUrl);
+  // 6. Security headers on responses
+  const response = NextResponse.next();
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(), usb=(), bluetooth=()"
+  );
+  if (process.env.NODE_ENV === "production") {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload"
+    );
   }
+  response.headers.set("X-XSS-Protection", "1; mode=block");
 
-  return NextResponse.next();
+  // Clean leaking server headers
+  response.headers.delete("x-powered-by");
+  response.headers.delete("X-Powered-By");
+  response.headers.delete("platform");
+  response.headers.delete("panel");
+  response.headers.delete("Server");
+
+  return response;
 }
 
-export const middleware = proxy;
 export default proxy;
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon\\.ico|icon.*\\.png|apple-touch-icon.*\\.png|sitemap\\.xml|robots\\.txt|llms\\.txt|llms-full\\.txt|\\.well-known).*)",
   ],
 };
