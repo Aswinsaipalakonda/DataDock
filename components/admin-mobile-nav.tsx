@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -12,12 +13,13 @@ import {
   Inbox, 
   Settings, 
   Megaphone, 
-  BarChart, 
+  BarChart3, 
   History, 
   User, 
   LogOut, 
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  GraduationCap
 } from "lucide-react";
 
 interface AdminMobileNavProps {
@@ -26,27 +28,47 @@ interface AdminMobileNavProps {
   userName?: string;
 }
 
-const navItems = [
-  { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { name: "User Management", href: "/admin/users", icon: Users },
-  { name: "Support Inquiries", href: "/admin/inquiries", icon: Inbox },
-  { name: "Courses & Branches", href: "/admin/taxonomy", icon: Settings },
-  { name: "Announcements", href: "/admin/announcements", icon: Megaphone },
-  { name: "Usage Metrics", href: "/admin/analytics", icon: BarChart },
-  { name: "System Logs", href: "/admin/logs", icon: History },
-  { name: "Admin Profile", href: "/admin/profile", icon: User },
+const navSections = [
+  {
+    title: "Core Workspaces",
+    items: [
+      { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+      { name: "User Management", href: "/admin/users", icon: Users },
+      { name: "Courses & Branches", href: "/admin/taxonomy", icon: Settings },
+    ],
+  },
+  {
+    title: "Curriculum & Analytics",
+    items: [
+      { name: "Usage Metrics", href: "/admin/analytics", icon: BarChart3 },
+      { name: "Support Inquiries", href: "/admin/inquiries", icon: Inbox },
+      { name: "Announcements", href: "/admin/announcements", icon: Megaphone },
+      { name: "System Logs", href: "/admin/logs", icon: History },
+    ],
+  },
+  {
+    title: "Account",
+    items: [
+      { name: "Admin Profile", href: "/admin/profile", icon: User },
+    ],
+  },
 ];
 
 export default function AdminMobileNav({ signOutAction, userEmail, userName }: AdminMobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
 
-  // Close on route change
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Close automatically on route navigation
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
 
-  // Lock body scroll when open
+  // Lock body scroll cleanly when drawer is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -58,7 +80,7 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
     };
   }, [isOpen]);
 
-  // Close on escape key
+  // Close on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -71,53 +93,53 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
 
   return (
     <div className="lg:hidden">
-      {/* Hamburger Menu Toggle Button */}
+      {/* Modern Interactive Hamburger Toggle Button */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition-colors cursor-pointer border border-slate-200"
+        className="p-2.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 transition-all border border-slate-200/90 shadow-2xs active:scale-95 flex items-center justify-center cursor-pointer"
         aria-label="Open Admin Menu"
-        title="Admin Menu"
+        title="Admin Navigation Menu"
       >
-        <Menu className="h-5 w-5" />
+        <Menu className="h-5 w-5 text-slate-700" />
       </button>
 
-      {/* Slide-over Drawer Backdrop & Panel */}
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] overflow-hidden">
-          {/* Backdrop */}
+      {/* Render via Portal directly into document.body to break free of any header containing block or backdrop-filter */}
+      {mounted && isOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-hidden">
+          {/* Animated Dimming Backdrop with blur */}
           <div
             onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
+            className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
           />
 
-          {/* Slide-out Drawer from Right */}
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10 z-[110]">
+          {/* Slide-out Drawer Panel */}
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10 z-[10000]">
             <div 
-              style={{ backgroundColor: "#0f172a" }}
-              className="w-screen max-w-xs sm:max-w-sm bg-slate-900 shadow-2xl flex flex-col border-l border-slate-800 text-white animate-in slide-in-from-right duration-300"
+              style={{ backgroundColor: "#0b0f19" }}
+              className="w-screen max-w-[320px] sm:max-w-[360px] shadow-2xl flex flex-col border-l border-slate-800 text-white animate-in slide-in-from-right duration-300 ease-out"
             >
               
-              {/* Drawer Header */}
+              {/* Drawer Brand Header */}
               <div 
-                style={{ backgroundColor: "#0b1120" }}
-                className="p-5 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-950"
+                style={{ backgroundColor: "#080c14" }}
+                className="p-4 sm:p-5 border-b border-slate-800/90 flex items-center justify-between gap-3 shrink-0"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white p-1 border border-slate-700 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-white p-1 border border-slate-700 flex items-center justify-center shrink-0 shadow-sm">
                     <Image
                       src="/De_logo.jpg"
                       alt="DE Logo"
-                      width={32}
-                      height={32}
-                      className="w-full h-full object-contain rounded-lg"
+                      width={36}
+                      height={36}
+                      className="w-full h-full object-contain rounded-xl"
                     />
                   </div>
                   <div className="min-w-0">
-                    <span className="font-bold text-white text-sm block leading-tight">
+                    <span className="font-extrabold text-white text-sm block leading-tight tracking-tight">
                       Data Engineering
                     </span>
-                    <span className="text-[10px] text-slate-400 font-medium block">
+                    <span className="text-[11px] text-slate-400 font-medium block">
                       MVGR College (A)
                     </span>
                   </div>
@@ -126,75 +148,103 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                  className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                   aria-label="Close menu"
+                  title="Close Navigation"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              {/* Admin User Info Card */}
-              <div className="px-5 py-4 border-b border-slate-800/80 bg-slate-900/30">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0 font-bold text-xs">
-                    <ShieldCheck className="h-4 w-4" />
+              {/* Administrator Identity Badge */}
+              <div className="p-4 border-b border-slate-800/80 bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900/40 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-9 h-9 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0 font-bold text-xs shadow-inner">
+                    <ShieldCheck className="h-5 w-5" />
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#0b0f19] ring-1 ring-emerald-500/50" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-xs font-bold text-white block truncate">
-                      {userName || "Administrator"}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-white block truncate">
+                        {userName || "Administrator"}
+                      </span>
+                    </div>
                     <span className="text-[10px] text-slate-400 block truncate">
-                      {userEmail || "System Administrator"}
+                      {userEmail || "admin@mvgrce.edu.in"}
+                    </span>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[9px] font-semibold border border-blue-500/30">
+                      System Administrator • Full Access
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Navigation Links */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-1 overscroll-contain">
-                <span className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
-                  Admin Navigation
-                </span>
-                {navItems.map((item) => {
-                  const isActive = pathname === item.href;
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setIsOpen(false)}
-                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                        isActive
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-slate-400"}`} />
-                        <span>{item.name}</span>
-                      </div>
-                      <ChevronRight className={`h-3 w-3 ${isActive ? "text-white/70" : "text-slate-600"}`} />
-                    </Link>
-                  );
-                })}
+              {/* Categorized Navigation Menu Links */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-5 overscroll-contain">
+                {navSections.map((section) => (
+                  <div key={section.title} className="space-y-1.5">
+                    <span className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      {section.title}
+                    </span>
+                    <div className="space-y-1">
+                      {section.items.map((item) => {
+                        const isActive = pathname === item.href;
+                        const Icon = item.icon;
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setIsOpen(false)}
+                            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all group cursor-pointer ${
+                              isActive
+                                ? "bg-primary text-white shadow-md shadow-primary/20 font-bold"
+                                : "text-slate-300 hover:text-white hover:bg-white/10"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`p-1.5 rounded-lg transition-colors ${
+                                isActive ? "bg-white/20 text-white" : "bg-white/5 text-slate-400 group-hover:text-white"
+                              }`}>
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <span className="tracking-tight">{item.name}</span>
+                            </div>
+                            <ChevronRight className={`h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 ${
+                              isActive ? "text-white/80" : "text-slate-600 group-hover:text-slate-400"
+                            }`} />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {/* Drawer Footer with Sign Out */}
-              <div className="p-4 border-t border-slate-800 bg-slate-900/60">
+              {/* Drawer Footer with Session Controls */}
+              <div 
+                style={{ backgroundColor: "#080c14" }}
+                className="p-4 border-t border-slate-800/90 space-y-2.5 shrink-0"
+              >
                 <form action={signOutAction}>
                   <button
                     type="submit"
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition-all cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/25 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-[0.98]"
                   >
                     <LogOut className="h-4 w-4" />
-                    <span>Sign Out</span>
+                    <span>Sign Out Account</span>
                   </button>
                 </form>
+                <div className="text-center">
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    DE E-Learn Portal • MVGR College (A)
+                  </span>
+                </div>
               </div>
 
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
