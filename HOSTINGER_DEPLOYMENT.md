@@ -74,18 +74,37 @@ This guide provides step-by-step instructions for deploying the **DE E-Learn Pla
 
 ---
 
-## Step 5: Install Dependencies & Start Application
-1. In Hostinger hPanel Node.js manager, click **NPM Install** (or connect via SSH terminal and run `npm install --omit=dev`).
-2. Ensure the upload storage directory has write permissions:
+## Step 5: Fix File & Directory Permissions
+On Linux/Hostinger servers, the build user needs read and execute permissions across all source folders (especially `/app`, `/app/api`, `/components`, `/lib`):
+1. In Hostinger **SSH Terminal** (or File Manager permission manager), navigate to your app directory and run:
    ```bash
+   # Set directory permissions to 755 (read, write, execute for owner; read, execute for others)
+   find . -type d -exec chmod 755 {} +
+
+   # Set file permissions to 644 (read, write for owner; read for others)
+   find . -type f -exec chmod 644 {} +
+
+   # Ensure server upload directory has full read/write access
    mkdir -p server/uploads/materials
-   chmod -R 755 server/uploads
+   chmod -R 775 server/uploads
    ```
-3. In Hostinger Node.js Application manager, click **Restart Application**.
 
 ---
 
-## Step 6: Verify Deployment
+## Step 6: Install Dependencies & Run Build on Hostinger
+1. In Hostinger hPanel Node.js manager or SSH terminal:
+   ```bash
+   # Install dependencies
+   npm install
+
+   # Run Next.js production build
+   npm run build
+   ```
+2. In Hostinger Node.js Application manager, click **Restart Application**.
+
+---
+
+## Step 7: Verify Deployment
 1. Visit `https://yourdomain.com/api/health` to confirm the Express API and MySQL connection are healthy:
    ```json
    {
@@ -98,3 +117,14 @@ This guide provides step-by-step instructions for deploying the **DE E-Learn Pla
    - **Email**: `admin@mvgrce.edu.in`
    - **Password**: `AdminPassword@123!`
 3. Test uploading a file as faculty, downloading as student, and viewing analytics in the admin console.
+
+---
+
+## Troubleshooting Build & Permission Errors
+
+### Error: `Permission denied / scandir /app/api/auth`
+- **Cause**: The Hostinger build runner does not have read access to the directory, or an empty subfolder was present.
+- **Fix**:
+  1. Ensure no empty folders exist under `/app/api/` (stale/empty directories have been cleaned up).
+  2. Run `chmod -R 755 app/` and `chmod -R 644 app/**/*` in your project root on the server.
+  3. Re-trigger the build via Hostinger hPanel or run `npm run build`.

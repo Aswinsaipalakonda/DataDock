@@ -1,0 +1,359 @@
+[
+  {
+    "code": "R24MSCST003",
+    "title": "Data Structures",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST004",
+    "title": "OOP with C++",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST005",
+    "title": "Digital Logic Design",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST006",
+    "title": "Principles of Programming Languages",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT001/R24MFBAT001/ R24MRSMT001",
+    "title": "Financial Management(EMC) / Managerial Economics and Financial Analysis(FBA) / Introduction to Robotics (RSA)",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT002/R24MFBAT002/R24MIAST002",
+    "title": "Leadership and Team Management(EMC) / Human Resources and organizational Behaviour (FBA) / Sensor, Actuators and Control Logic (RSA)",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL003",
+    "title": "Data Structures Lab",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL004",
+    "title": "OOP with C++ Lab",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCL001/R24MBMCL002/R24MIASL001",
+    "title": "Computer Aided Geometric Design and Assembly Lab (EMC) / Financial Accounting Practice( FBA) / Sensor and Control Logic Practice(RSA)",
+    "branch": "CSM",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST003",
+    "title": "Data Structures",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST004",
+    "title": "OOP with C++",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST005",
+    "title": "Digital Logic Design",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST006",
+    "title": "Principles of Programming Languages",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT001/R24MFBAT001/ R24MRSMT001",
+    "title": "Financial Management(EMC) / Managerial Economics and Financial Analysis(FBA) / Introduction to Robotics (RSA)",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT002/R24MFBAT002/R24MIAST002",
+    "title": "Leadership and Team Management(EMC) / Human Resources and organizational Behaviour (FBA) / Sensor, Actuators and Control Logic (RSA)",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL003",
+    "title": "Data Structures Lab",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL004",
+    "title": "OOP with C++ Lab",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCL001/R24MBMCL002/R24MIASL001",
+    "title": "Computer Aided Geometric Design and Assembly Lab (EMC) / Financial Accounting Practice( FBA) / Sensor and Control Logic Practice(RSA)",
+    "branch": "CSD",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST003",
+    "title": "Data Structures",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST004",
+    "title": "OOP with C++",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST005",
+    "title": "Digital Logic Design",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST006",
+    "title": "Principles of Programming Languages",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT001/R24MFBAT001/ R24MRSMT001",
+    "title": "Financial Management(EMC) / Managerial Economics and Financial Analysis(FBA) / Introduction to Robotics (RSA)",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT002/R24MFBAT002/R24MIAST002",
+    "title": "Leadership and Team Management(EMC) / Human Resources and organizational Behaviour (FBA) / Sensor, Actuators and Control Logic (RSA)",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL003",
+    "title": "Data Structures Lab",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL004",
+    "title": "OOP with C++ Lab",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCL001/R24MBMCL002/R24MIASL001",
+    "title": "Computer Aided Geometric Design and Assembly Lab (EMC) / Financial Accounting Practice( FBA) / Sensor and Control Logic Practice(RSA)",
+    "branch": "CIC",
+    "semester": 3,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST011",
+    "title": "Operating Systems",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST012",
+    "title": "Advanced Java Programming",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST013",
+    "title": "Automata and Compiler Design",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST014",
+    "title": "Computer Networks",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST019",
+    "title": "Data Warehousing and Data Mining",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT005 / R24MIACT005",
+    "title": "Entrepreneurship (BMC) / Industry 4.0 and IIOT (IAC)",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL007",
+    "title": "Advanced Java Programming Lab",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCL003 / R24MIACL003",
+    "title": "Digital Engineerinng Lab (BMC)/ Virtual Instrumentation Lab ( IAC)",
+    "branch": "CSM",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST011",
+    "title": "Operating Systems",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST012",
+    "title": "Advanced Java Programming",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST013",
+    "title": "Automata and Compiler Design",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST014",
+    "title": "Computer Networks",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST026",
+    "title": "Statistical and Mathematical Foundation of Data Analytics",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT005 / R24MIACT005",
+    "title": "Entrepreneurship (BMC) / Industry 4.0 and IIOT (IAC)",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL007",
+    "title": "Advanced Java Programming Lab",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCL003 / R24MIACL003",
+    "title": "Digital Engineerinng Lab (BMC)/ Virtual Instrumentation Lab ( IAC)",
+    "branch": "CSD",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST011",
+    "title": "Operating Systems",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST012",
+    "title": "Advanced Java Programming",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST013",
+    "title": "Automata and Compiler Design",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST014",
+    "title": "Computer Networks",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCST032",
+    "title": "Cryptography and Information Security",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCT005",
+    "title": "Entrepreneurship (BMC)",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MSCSL007",
+    "title": "Advanced Java Programming Lab",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  },
+  {
+    "code": "R24MBMCL003",
+    "title": "Digital Engineerinng Lab (BMC)",
+    "branch": "CIC",
+    "semester": 5,
+    "regulation": "R24"
+  }
+]

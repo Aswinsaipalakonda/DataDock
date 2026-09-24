@@ -42,10 +42,11 @@ yarn-error.log*
 
 # deployment archives
 *.zip
-!datadock-deployment.zip
 *.tar.gz
+brag-output/
 /data/
 /data/*
+/HOSTINGER_DEPLOYMENT.md
 
 # local runtime data
 .data/

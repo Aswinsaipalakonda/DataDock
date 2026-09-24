@@ -10,6 +10,7 @@
     "db:import": "node server/database/import-curriculum-and-students.js",
     "build": "next build",
     "start": "next start",
+    "package:deploy": "node scripts/package-deploy.js",
     "lint": "eslint"
   },
   "dependencies": {
@@ -39,12 +40,12 @@
     "react-dom": "19.2.4",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
-    "xlsx": "^0.18.5"
+    "eslint-config-next": "16.2.10"
   }
 }
