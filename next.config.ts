@@ -59,16 +59,7 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex, nofollow, nosnippet, noarchive, noimageindex" },
         ],
       },
-      ...(isProd
-        ? [
-            {
-              source: "/_next/static/:path*",
-              headers: [
-                { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-              ],
-            },
-          ]
-        : []),
+
       {
         source: "/(favicon|icon|apple-touch-icon)(.*)",
         headers: [
