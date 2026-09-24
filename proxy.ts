@@ -34,11 +34,17 @@ function checkRateLimit(
 }
 
 function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const firstIp = forwarded.split(",")[0].trim();
+    if (firstIp && firstIp !== "unknown") return firstIp;
+  }
   return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
     req.headers.get("cf-connecting-ip") ??
-    "0.0.0.0"
+    req.headers.get("x-real-ip") ??
+    req.headers.get("true-client-ip") ??
+    req.headers.get("x-client-ip") ??
+    "client"
   );
 }
 
@@ -116,8 +122,8 @@ export async function proxy(request: NextRequest) {
   // 4. Rate limiting: login, contact, and api
   const ip = getClientIp(request);
 
-  if (isLogin) {
-    const loginRl = checkRateLimit(`rl:ip:login:${ip}`, 20, 15 * 60 * 1000);
+  if (isLogin && method === "POST") {
+    const loginRl = checkRateLimit(`rl:ip:login:${ip}`, 50, 15 * 60 * 1000);
     if (!loginRl.allowed) {
       return new NextResponse("Too many login attempts from this network. Please try again later.", {
         status: 429,
