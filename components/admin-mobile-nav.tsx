@@ -85,31 +85,24 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
     }, 500); // Wait for the 500ms smooth transition to finish before unmounting
   }, []);
 
-  // When drawer mounts into DOM, trigger visible state after initial paint for buttery smooth entrance
+  // When drawer mounts into DOM, trigger visible state after paint for buttery smooth entrance
   useEffect(() => {
     if (isDrawerMounted) {
-      let frame1: number;
-      let frame2: number;
-      frame1 = requestAnimationFrame(() => {
-        frame2 = requestAnimationFrame(() => {
-          setIsVisible(true);
-        });
-      });
-      return () => {
-        cancelAnimationFrame(frame1);
-        cancelAnimationFrame(frame2);
-      };
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, 20);
+      return () => clearTimeout(timer);
     }
   }, [isDrawerMounted]);
 
-  // Close smoothly on route navigation
+  // Close smoothly ONLY when route navigation actually changes the pathname
+  const prevPathnameRef = useRef(pathname);
   useEffect(() => {
-    if (initialMountRef.current) {
-      initialMountRef.current = false;
-      return;
-    }
-    if (isDrawerMounted) {
-      handleClose();
+    if (prevPathnameRef.current !== pathname) {
+      prevPathnameRef.current = pathname;
+      if (isDrawerMounted) {
+        handleClose();
+      }
     }
   }, [pathname, isDrawerMounted, handleClose]);
 
@@ -174,10 +167,11 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
           />
 
           {/* Slide-out Drawer Panel - 500ms smooth gliding transition */}
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10 z-[10000]">
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10 z-[10000] pointer-events-none">
             <div 
               style={{ backgroundColor: "#0b0f19" }}
-              className={`w-screen max-w-[320px] sm:max-w-[360px] shadow-2xl flex flex-col border-l border-slate-800 text-white transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              onClick={(e) => e.stopPropagation()}
+              className={`w-screen max-w-[320px] sm:max-w-[360px] shadow-2xl flex flex-col border-l border-slate-800 text-white transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-auto ${
                 isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
               }`}
             >
