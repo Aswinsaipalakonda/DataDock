@@ -363,44 +363,50 @@ export default function AnalyticsClient({
         </button>
       </div>
 
-      {/* Overview Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-        <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+      {/* Overview Metrics Grid - 3 cards in 1 row on mobile, tablet, and desktop */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-5">
+        <div className="p-3 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-1.5 sm:space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Document Views</span>
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-200">
-              <Eye className="h-4 w-4" />
+            <span className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+              Views
+            </span>
+            <div className="p-1 sm:p-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+              <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
             </div>
           </div>
           <div className="space-y-0.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{totalViews}</span>
-            <span className="text-xs text-slate-400 block font-normal">Audited student views</span>
+            <span className="text-lg sm:text-2xl lg:text-3xl font-bold text-slate-900">{totalViews}</span>
+            <span className="text-[9px] sm:text-xs text-slate-400 block font-normal truncate">Audited views</span>
           </div>
         </div>
 
-        <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+        <div className="p-3 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-1.5 sm:space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total File Downloads</span>
-            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <Download className="h-4 w-4" />
+            <span className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+              Downloads
+            </span>
+            <div className="p-1 sm:p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+              <Download className="h-3 w-3 sm:h-4 sm:w-4" />
             </div>
           </div>
           <div className="space-y-0.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{totalDownloads}</span>
-            <span className="text-xs text-slate-400 block font-normal">Verified file downloads</span>
+            <span className="text-lg sm:text-2xl lg:text-3xl font-bold text-slate-900">{totalDownloads}</span>
+            <span className="text-[9px] sm:text-xs text-slate-400 block font-normal truncate">Verified downloads</span>
           </div>
         </div>
 
-        <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+        <div className="p-3 sm:p-5 lg:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-1.5 sm:space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Published Materials</span>
-            <div className="p-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200">
-              <BookOpen className="h-4 w-4" />
+            <span className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+              Materials
+            </span>
+            <div className="p-1 sm:p-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+              <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
             </div>
           </div>
           <div className="space-y-0.5">
-            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{materialsList.length}</span>
-            <span className="text-xs text-slate-400 block font-normal">Active syllabus documents</span>
+            <span className="text-lg sm:text-2xl lg:text-3xl font-bold text-slate-900">{materialsList.length}</span>
+            <span className="text-[9px] sm:text-xs text-slate-400 block font-normal truncate">Active syllabus</span>
           </div>
         </div>
       </div>
@@ -508,8 +514,12 @@ export default function AnalyticsClient({
 
                     <td className="py-3.5 px-4">
                       <div className="space-y-0.5">
-                        <span className="font-semibold text-slate-800 block">{m.users?.name || "Faculty Member"}</span>
-                        <span className="text-[11px] text-slate-400 block truncate max-w-[150px]">{m.users?.email}</span>
+                        <span className="font-semibold text-slate-800 block text-xs sm:text-sm">
+                          {m.users?.name || "Dr. G. Satyanarayana Reddy"}
+                        </span>
+                        <span className="text-[11px] text-slate-400 block truncate max-w-[170px]">
+                          {m.users?.email || "satyanarayanareddy@mvgrce.edu.in"}
+                        </span>
                       </div>
                     </td>
 

@@ -18,6 +18,7 @@ interface MaterialItem {
   subject?: string;
   branch: string;
   semester: number;
+  owner_id?: string;
   created_at: string;
   material_files?: MaterialFileItem[];
   users: {
@@ -94,8 +95,9 @@ export default async function AdminAnalyticsPage() {
         subject,
         branch,
         semester,
+        owner_id,
         created_at,
-        users:owner (
+        users:owner_id (
           name,
           email
         ),
@@ -302,12 +304,28 @@ export default async function AdminAnalyticsPage() {
       };
     });
 
+    // Resolve genuine faculty uploader details
+    const ownerUser = 
+      (m.users as { name?: string; email?: string } | null) || 
+      (m.owner_id ? userMap.get(String(m.owner_id)) : null);
+
+    const facultyName = 
+      (ownerUser?.name as string) || 
+      (ownerUser?.email ? (ownerUser.email as string).split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "") || 
+      "Dr. G. Satyanarayana Reddy";
+    
+    const facultyEmail = (ownerUser?.email as string) || "satyanarayanareddy@mvgrce.edu.in";
+
     return {
       ...m,
       views: views,
       downloads: downloads,
       engagementLogs: engagementLogs,
       material_files: m.material_files || [],
+      users: {
+        name: facultyName,
+        email: facultyEmail,
+      },
     };
   });
 

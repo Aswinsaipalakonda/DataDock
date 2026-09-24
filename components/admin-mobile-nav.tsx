@@ -84,19 +84,25 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
 
       {/* Slide-over Drawer Backdrop & Panel */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <div className="fixed inset-0 z-[100] overflow-hidden">
           {/* Backdrop */}
           <div
             onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
           />
 
           {/* Slide-out Drawer from Right */}
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10 z-50">
-            <div className="w-screen max-w-xs sm:max-w-sm bg-[#0F172A] shadow-2xl flex flex-col border-l border-slate-800 text-white animate-in slide-in-from-right duration-300">
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10 z-[110]">
+            <div 
+              style={{ backgroundColor: "#0f172a" }}
+              className="w-screen max-w-xs sm:max-w-sm bg-slate-900 shadow-2xl flex flex-col border-l border-slate-800 text-white animate-in slide-in-from-right duration-300"
+            >
               
               {/* Drawer Header */}
-              <div className="p-5 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-900/60">
+              <div 
+                style={{ backgroundColor: "#0b1120" }}
+                className="p-5 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-950"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-white p-1 border border-slate-700 flex items-center justify-center shrink-0">
                     <Image
