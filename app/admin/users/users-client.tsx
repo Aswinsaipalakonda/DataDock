@@ -971,19 +971,19 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
   };
 
   return (
-    <div className="space-y-6 w-full pb-10" suppressHydrationWarning>
+    <div className="space-y-4 sm:space-y-6 w-full pb-28 lg:pb-10" suppressHydrationWarning>
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* ========================================================================= */}
       {/* 1. EXECUTIVE HEADER & ACTIONS */}
       {/* ========================================================================= */}
-      <div className="p-6 sm:p-7 rounded-3xl bg-white border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-        <div className="space-y-1.5 max-w-xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-800 mb-0.5">
-            <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+      <div className="p-4.5 sm:p-7 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4 sm:gap-5">
+        <div className="space-y-1 sm:space-y-1.5 max-w-xl">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] sm:text-xs font-semibold text-slate-800 mb-0.5">
+            <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-600" />
             <span>Identity & Roster Administration</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
             User Directory & Governance
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed">
@@ -991,8 +991,24 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Action Buttons: Responsive Grid / Wrap */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 shrink-0 w-full sm:w-auto">
+          <button
+            onClick={() => openCreateDrawer()}
+            className="col-span-2 sm:col-span-1 order-first sm:order-last inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-medium transition-all shadow-xs cursor-pointer active:scale-95"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>Enroll User</span>
+          </button>
+
+          <button
+            onClick={openCsvModal}
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4.5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium transition-all cursor-pointer active:scale-95"
+          >
+            <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-700" />
+            <span>Batch Import</span>
+          </button>
+
           {counts.student > 0 && (
             <>
               <button
@@ -1004,9 +1020,9 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                     });
                   });
                 }}
-                className="inline-flex items-center gap-2 px-4.5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-2xs"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4.5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-2xs active:scale-95"
               >
-                <GraduationCap className="h-4 w-4 text-blue-600" />
+                <GraduationCap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
                 <span>Promote Cohort</span>
               </button>
 
@@ -1018,45 +1034,29 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                     startCleanupMode();
                   }
                 }}
-                className={`inline-flex items-center gap-2 px-4.5 py-2.5 rounded-full border text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-2xs ${
+                className={`col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4.5 py-2.5 rounded-full border text-xs sm:text-sm font-medium transition-all cursor-pointer shadow-2xs active:scale-95 ${
                   isCleanupMode
                     ? "bg-rose-50 text-rose-800 border-rose-300 ring-2 ring-rose-400 font-semibold"
                     : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
                 }`}
               >
-                <UserMinus className="h-4 w-4 text-rose-600" />
+                <UserMinus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-600" />
                 <span>{isCleanupMode ? "Exit Cleanup" : "Year-End Cleanup"}</span>
               </button>
             </>
           )}
-
-          <button
-            onClick={openCsvModal}
-            className="inline-flex items-center gap-2 px-4.5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium transition-all cursor-pointer"
-          >
-            <Upload className="h-4 w-4 text-slate-700" />
-            <span>Batch Import (CSV)</span>
-          </button>
-
-          <button
-            onClick={() => openCreateDrawer()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-medium transition-all shadow-xs cursor-pointer"
-          >
-            <UserPlus className="h-4 w-4" />
-            <span>Enroll User</span>
-          </button>
         </div>
       </div>
 
       {/* ========================================================================= */}
       {/* 2. ROLE TABS & STATUS INDICATORS */}
       {/* ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Navigation Role Tabs */}
-        <div className="inline-flex p-1.5 rounded-full bg-slate-100 border border-slate-200 gap-1 self-start">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Navigation Role Tabs: horizontally scrollable without breaking boundary on mobile */}
+        <div className="w-full sm:w-auto overflow-x-auto no-scrollbar flex items-center p-1 sm:p-1.5 rounded-2xl sm:rounded-full bg-slate-100 border border-slate-200 gap-1 shrink-0">
           <button
             onClick={() => { setActiveTab("all"); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-xl sm:rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "all"
                 ? "bg-slate-900 text-white shadow-sm border border-slate-800 font-semibold"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
@@ -1064,7 +1064,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           >
             <UsersIcon className={`h-3.5 w-3.5 ${activeTab === "all" ? "text-slate-200" : "text-slate-600"}`} />
             <span>All Users</span>
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold ${
               activeTab === "all"
                 ? "bg-white/20 text-white"
                 : "bg-slate-200/80 text-slate-700"
@@ -1075,7 +1075,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
 
           <button
             onClick={() => { setActiveTab("faculty"); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-xl sm:rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "faculty"
                 ? "bg-slate-900 text-white shadow-sm border border-slate-800 font-semibold"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
@@ -1083,7 +1083,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           >
             <Briefcase className={`h-3.5 w-3.5 ${activeTab === "faculty" ? "text-indigo-300" : "text-slate-700"}`} />
             <span>Faculty</span>
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold ${
               activeTab === "faculty"
                 ? "bg-white/20 text-white"
                 : "bg-slate-200/80 text-slate-700"
@@ -1094,7 +1094,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
 
           <button
             onClick={() => { setActiveTab("student"); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-xl sm:rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "student"
                 ? "bg-slate-900 text-white shadow-sm border border-slate-800 font-semibold"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
@@ -1102,7 +1102,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           >
             <GraduationCap className={`h-3.5 w-3.5 ${activeTab === "student" ? "text-blue-400" : "text-blue-600"}`} />
             <span>Students</span>
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold ${
               activeTab === "student"
                 ? "bg-white/20 text-white"
                 : "bg-slate-200/80 text-slate-700"
@@ -1113,7 +1113,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
 
           <button
             onClick={() => { setActiveTab("admin"); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-xl sm:rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "admin"
                 ? "bg-slate-900 text-white shadow-sm border border-slate-800 font-semibold"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
@@ -1121,7 +1121,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           >
             <ShieldCheck className={`h-3.5 w-3.5 ${activeTab === "admin" ? "text-amber-400" : "text-amber-600"}`} />
             <span>Admins</span>
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold ${
               activeTab === "admin"
                 ? "bg-white/20 text-white"
                 : "bg-slate-200/80 text-slate-700"
@@ -1132,7 +1132,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
         </div>
 
         {/* Status Indicators */}
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 shrink-0">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 shrink-0 self-start sm:self-auto">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-800">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <span>Active: {counts.active}</span>
@@ -1280,10 +1280,10 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
       {/* ========================================================================= */}
       {/* 3. FILTERS & SEARCH TOOLBAR */}
       {/* ========================================================================= */}
-      <div className="p-4 sm:p-4.5 rounded-3xl bg-white border border-slate-200/90 shadow-xs flex flex-wrap items-center gap-3">
-        {/* Search Input */}
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+      <div className="p-3.5 sm:p-4.5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-xs space-y-3">
+        {/* Search Input - Full Width */}
+        <div className="relative w-full">
+          <Search className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
@@ -1295,7 +1295,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                 ? "Search student name, roll number, email..."
                 : "Search by name, roll number, email, designation..."
             }
-            className="w-full pl-11 pr-10 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all font-normal"
+            className="w-full pl-10 sm:pl-11 pr-10 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all font-normal"
           />
           {searchQuery && (
             <button
@@ -1307,98 +1307,101 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           )}
         </div>
 
-        {/* Branch / Department Filter */}
-        <div className="shrink-0">
-          <select
-            value={branchFilter}
-            onChange={(e) => { setBranchFilter(e.target.value); setCurrentPage(1); }}
-            className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer"
-          >
-            <option value="all">All Branches</option>
-            {branches.map((b) => (
-              <option key={b.code} value={b.code}>
-                {b.code} - {b.name}
-              </option>
-            ))}
-          </select>
+        {/* Dropdowns in a Responsive Grid on mobile (2 cols), flex on tablet/desktop */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* Branch / Department Filter */}
+          <div className="w-full sm:w-auto">
+            <select
+              value={branchFilter}
+              onChange={(e) => { setBranchFilter(e.target.value); setCurrentPage(1); }}
+              className="w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer truncate"
+            >
+              <option value="all">All Branches</option>
+              {branches.map((b) => (
+                <option key={b.code} value={b.code}>
+                  {b.code} - {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Designation Filter (visible for Faculty or All) */}
+          {(activeTab === "faculty" || activeTab === "all") && (
+            <div className="w-full sm:w-auto">
+              <select
+                value={designationFilter}
+                onChange={(e) => { setDesignationFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer truncate"
+              >
+                <option value="all">All Designations</option>
+                {allKnownDesignations.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Semester Filter (visible for Students or All) */}
+          {(activeTab === "student" || activeTab === "all") && (
+            <div className="w-full sm:w-auto">
+              <select
+                value={semesterFilter}
+                onChange={(e) => { setSemesterFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer truncate"
+              >
+                <option value="all">All Semesters</option>
+                {semesters.map((s) => (
+                  <option key={s.number} value={s.number.toString()}>
+                    Sem {s.number}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Section Filter (visible for Students or All) */}
+          {(activeTab === "student" || activeTab === "all") && (
+            <div className="w-full sm:w-auto">
+              <select
+                value={sectionFilter}
+                onChange={(e) => { setSectionFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer truncate"
+              >
+                <option value="all">All Sections</option>
+                {allKnownSections.map((sec) => (
+                  <option key={sec} value={sec}>
+                    Section {sec}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Status Filter */}
+          <div className="w-full sm:w-auto">
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+              className="w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer truncate"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="deactivated">Deactivated</option>
+            </select>
+          </div>
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="col-span-2 sm:col-span-1 px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer text-center"
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
-
-        {/* Designation Filter (visible for Faculty or All) */}
-        {(activeTab === "faculty" || activeTab === "all") && (
-          <div className="shrink-0">
-            <select
-              value={designationFilter}
-              onChange={(e) => { setDesignationFilter(e.target.value); setCurrentPage(1); }}
-              className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer"
-            >
-              <option value="all">All Designations</option>
-              {allKnownDesignations.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Semester Filter (visible for Students or All) */}
-        {(activeTab === "student" || activeTab === "all") && (
-          <div className="shrink-0">
-            <select
-              value={semesterFilter}
-              onChange={(e) => { setSemesterFilter(e.target.value); setCurrentPage(1); }}
-              className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer"
-            >
-              <option value="all">All Semesters</option>
-              {semesters.map((s) => (
-                <option key={s.number} value={s.number.toString()}>
-                  Sem {s.number}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Section Filter (visible for Students or All) */}
-        {(activeTab === "student" || activeTab === "all") && (
-          <div className="shrink-0">
-            <select
-              value={sectionFilter}
-              onChange={(e) => { setSectionFilter(e.target.value); setCurrentPage(1); }}
-              className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer"
-            >
-              <option value="all">All Sections</option>
-              {allKnownSections.map((sec) => (
-                <option key={sec} value={sec}>
-                  Section {sec}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Status Filter */}
-        <div className="shrink-0">
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-            className="px-4 py-2.5 rounded-full bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 font-normal focus:bg-white focus:outline-none focus:border-slate-800 transition-all cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active Accounts</option>
-            <option value="deactivated">Deactivated</option>
-          </select>
-        </div>
-
-        {/* Clear Filters Button */}
-        {hasActiveFilters && (
-          <button
-            onClick={clearAllFilters}
-            className="px-4 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer shrink-0"
-          >
-            Clear Filters
-          </button>
-        )}
       </div>
 
       {/* ========================================================================= */}
@@ -1438,7 +1441,187 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile View: Dedicated Adaptive Cards */}
+            <div className="block md:hidden divide-y divide-slate-100">
+              {/* Cleanup Mode Mobile Page Bulk Toggle */}
+              {isCleanupMode && (
+                <div className="p-3 bg-rose-50/70 border-b border-rose-200/80 flex items-center justify-between text-xs">
+                  <label className="flex items-center gap-2 font-bold text-rose-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={
+                        paginatedUsers.length > 0 &&
+                        paginatedUsers.every((u) => selectedStudentIds.has(u.id))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedStudentIds((prev) => {
+                            const next = new Set(prev);
+                            paginatedUsers.forEach((u) => next.add(u.id));
+                            return next;
+                          });
+                        } else {
+                          setSelectedStudentIds((prev) => {
+                            const next = new Set(prev);
+                            paginatedUsers.forEach((u) => next.delete(u.id));
+                            return next;
+                          });
+                        }
+                      }}
+                      className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300"
+                    />
+                    <span>Select all {paginatedUsers.length} on this page</span>
+                  </label>
+                  <span className="text-[11px] font-bold text-rose-700">
+                    {cleanupSelectedCount} selected
+                  </span>
+                </div>
+              )}
+
+              {paginatedUsers.map((u) => {
+                const initials = u.name
+                  ? u.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()
+                  : "U";
+
+                const roleBadgeStyle =
+                  u.role === "admin"
+                    ? "bg-amber-50 text-amber-800 border-amber-200/80"
+                    : u.role === "faculty"
+                    ? "bg-slate-100 text-slate-800 border-slate-200/90 font-semibold"
+                    : "bg-blue-50 text-blue-800 border-blue-200/80";
+
+                const avatarStyle =
+                  u.role === "admin"
+                    ? "bg-amber-600 text-white"
+                    : u.role === "faculty"
+                    ? "bg-slate-900 text-white"
+                    : "bg-blue-600 text-white";
+
+                return (
+                  <div
+                    key={u.id}
+                    className={`p-4 transition-colors ${
+                      isCleanupMode && u.role === "student"
+                        ? selectedStudentIds.has(u.id)
+                          ? "bg-rose-50/30"
+                          : "bg-amber-50/30"
+                        : "hover:bg-slate-50/60"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        {isCleanupMode && u.role === "student" && (
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentIds.has(u.id)}
+                            onChange={() => toggleStudentSelection(u.id)}
+                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer shrink-0 mt-1 transition-transform active:scale-90"
+                            aria-label={`Select ${u.name} for graduation deletion`}
+                          />
+                        )}
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${avatarStyle}`}>
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm block truncate leading-snug">
+                              {u.name}
+                            </span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${roleBadgeStyle}`}>
+                              {u.role}
+                            </span>
+                          </div>
+                          <span className="text-slate-500 text-xs block truncate mt-0.5">
+                            {u.email}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Top Right Quick Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => openEditDrawer(u)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer"
+                          title="Edit user"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingUser(u)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                          title="Delete user"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Meta Row: Identifier, Branch / Sem, Status */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap text-xs">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {u.role === "student" && u.roll_number && (
+                          <span className="font-mono text-[11px] font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            {u.roll_number}
+                          </span>
+                        )}
+
+                        {u.role === "faculty" && u.designation && (
+                          <span className="text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 truncate max-w-[160px]">
+                            {u.designation}
+                          </span>
+                        )}
+
+                        {u.branch && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-medium">
+                            <Layers className="h-2.5 w-2.5 text-slate-500" />
+                            <span>{u.branch}</span>
+                            {u.role === "student" && u.current_semester && (
+                              <span>• S{u.current_semester}</span>
+                            )}
+                            {u.role === "student" && u.section && (
+                              <span>({u.section})</span>
+                            )}
+                          </span>
+                        )}
+
+                        {u.phone && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+                            <Phone className="h-2.5 w-2.5 text-slate-400" />
+                            <span>{u.phone}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Status Toggle Button */}
+                      <button
+                        onClick={() => handleToggleStatus(u)}
+                        disabled={togglingId === u.id}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all cursor-pointer shrink-0 ${
+                          u.status === "active"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100"
+                            : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                        }`}
+                      >
+                        {togglingId === u.id ? (
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        ) : (
+                          <span className={`w-1.5 h-1.5 rounded-full ${u.status === "active" ? "bg-emerald-500" : "bg-slate-400"}`} />
+                        )}
+                        <span className="capitalize">{u.status}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop View: Full Data Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -1659,38 +1842,42 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
             </div>
 
             {/* Pagination Toolbar */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
-              <div className="flex items-center gap-2">
-                <span>Showing</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                  className="px-2.5 py-1 rounded-full bg-white border border-slate-200 font-semibold text-slate-800 focus:outline-none cursor-pointer"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <span>of <strong>{filteredUsers.length}</strong> total records</span>
+            <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-1.5">
+                  <span>Show</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                    className="px-2 py-1 rounded-lg sm:rounded-full bg-white border border-slate-200 font-semibold text-slate-800 focus:outline-none cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+                <span>of <strong>{filteredUsers.length}</strong> records</span>
               </div>
 
-              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t border-slate-200/60 sm:border-0">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="p-1.5 rounded-full bg-white border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-slate-100 transition-all cursor-pointer disabled:cursor-not-allowed"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl sm:rounded-full bg-white border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-slate-100 transition-all cursor-pointer disabled:cursor-not-allowed font-medium"
                 >
                   <ChevronLeft className="h-4 w-4" />
+                  <span className="sm:hidden">Prev</span>
                 </button>
-                <span className="px-3 py-1 font-semibold text-slate-800">
-                  Page {currentPage} of {totalPages}
+                <span className="px-3 py-1 font-semibold text-slate-800 shrink-0">
+                  {currentPage} / {totalPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-full bg-white border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-slate-100 transition-all cursor-pointer disabled:cursor-not-allowed"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl sm:rounded-full bg-white border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-slate-100 transition-all cursor-pointer disabled:cursor-not-allowed font-medium"
                 >
+                  <span className="sm:hidden">Next</span>
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
@@ -1713,7 +1900,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           />
 
           {/* Slide-Over Panel Container */}
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
             <div
               data-lenis-prevent
               className={`w-screen max-w-md bg-white border-l border-slate-200 shadow-2xl flex flex-col justify-between transform transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] overscroll-contain h-full ${
