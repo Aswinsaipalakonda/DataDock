@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import Image from "next/image";
@@ -55,22 +55,76 @@ const navSections = [
 ];
 
 export default function AdminMobileNav({ signOutAction, userEmail, userName }: AdminMobileNavProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
+  const [isDrawerMounted, setIsDrawerMounted] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initialMountRef = useRef(true);
   const pathname = usePathname();
 
   useEffect(() => {
-    setMounted(true);
+    setHasMounted(true);
   }, []);
 
-  // Close automatically on route navigation
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+  const handleOpen = useCallback(() => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    setIsDrawerMounted(true);
+  }, []);
 
-  // Lock body scroll cleanly when drawer is open
+  const handleClose = useCallback(() => {
+    setIsVisible(false);
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsDrawerMounted(false);
+      closeTimeoutRef.current = null;
+    }, 500); // Wait for the 500ms smooth transition to finish before unmounting
+  }, []);
+
+  // When drawer mounts into DOM, trigger visible state after initial paint for buttery smooth entrance
   useEffect(() => {
-    if (isOpen) {
+    if (isDrawerMounted) {
+      let frame1: number;
+      let frame2: number;
+      frame1 = requestAnimationFrame(() => {
+        frame2 = requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
+      return () => {
+        cancelAnimationFrame(frame1);
+        cancelAnimationFrame(frame2);
+      };
+    }
+  }, [isDrawerMounted]);
+
+  // Close smoothly on route navigation
+  useEffect(() => {
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
+      return;
+    }
+    if (isDrawerMounted) {
+      handleClose();
+    }
+  }, [pathname, isDrawerMounted, handleClose]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Lock body scroll cleanly while drawer is mounted
+  useEffect(() => {
+    if (isDrawerMounted) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -78,25 +132,25 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isOpen]);
+  }, [isDrawerMounted]);
 
   // Close on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsOpen(false);
+      if (e.key === "Escape" && isDrawerMounted) {
+        handleClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [isDrawerMounted, handleClose]);
 
   return (
     <div className="lg:hidden">
       {/* Modern Interactive Hamburger Toggle Button */}
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={handleOpen}
         className="p-2.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 transition-all border border-slate-200/90 shadow-2xs active:scale-95 flex items-center justify-center cursor-pointer"
         aria-label="Open Admin Menu"
         title="Admin Navigation Menu"
@@ -105,19 +159,27 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
       </button>
 
       {/* Render via Portal directly into document.body to break free of any header containing block or backdrop-filter */}
-      {mounted && isOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] overflow-hidden">
-          {/* Animated Dimming Backdrop with blur */}
+      {hasMounted && isDrawerMounted && createPortal(
+        <div 
+          className={`fixed inset-0 z-[9999] overflow-hidden transition-all duration-500 ${
+            isVisible ? "pointer-events-auto" : "pointer-events-none"
+          }`}
+        >
+          {/* Animated Dimming Backdrop with blur - 500ms smooth fade */}
           <div
-            onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
+            onClick={handleClose}
+            className={`fixed inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              isVisible ? "opacity-100" : "opacity-0"
+            }`}
           />
 
-          {/* Slide-out Drawer Panel */}
+          {/* Slide-out Drawer Panel - 500ms smooth gliding transition */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10 z-[10000]">
             <div 
               style={{ backgroundColor: "#0b0f19" }}
-              className="w-screen max-w-[320px] sm:max-w-[360px] shadow-2xl flex flex-col border-l border-slate-800 text-white animate-in slide-in-from-right duration-300 ease-out"
+              className={`w-screen max-w-[320px] sm:max-w-[360px] shadow-2xl flex flex-col border-l border-slate-800 text-white transform transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
+              }`}
             >
               
               {/* Drawer Brand Header */}
@@ -147,7 +209,7 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
 
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleClose}
                   className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                   aria-label="Close menu"
                   title="Close Navigation"
@@ -194,7 +256,7 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
                           <Link
                             key={item.href}
                             href={item.href}
-                            onClick={() => setIsOpen(false)}
+                            onClick={handleClose}
                             className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all group cursor-pointer ${
                               isActive
                                 ? "bg-primary text-white shadow-md shadow-primary/20 font-bold"
@@ -236,7 +298,7 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
                 </form>
                 <div className="text-center">
                   <span className="text-[10px] text-slate-500 font-medium">
-                    DE E-Learn Portal • MVGR College (A)
+                    DataDock • MVGR College (A)
                   </span>
                 </div>
               </div>
