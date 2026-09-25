@@ -38,6 +38,7 @@ interface RawMaterial {
   created_at: string;
   subject: string;
   branch?: string;
+  section?: string;
   semester?: number;
   views?: number;
   downloads?: number;
@@ -67,6 +68,7 @@ export default async function FacultyMaterialsPage() {
         type,
         state,
         branch,
+        section,
         semester,
         created_at,
         subject,

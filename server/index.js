@@ -14,6 +14,7 @@ const announcementRoutes = require('./routes/announcementRoutes');
 const examRoutes = require('./routes/examRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const { uploadBaseDir } = require('./middleware/upload');
+require('./database/backup');
 
 const server = express();
 const port = parseInt(process.env.PORT || process.env.SERVER_PORT || '5000', 10);

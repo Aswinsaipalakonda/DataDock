@@ -6,7 +6,7 @@ const { uploadBaseDir } = require('../middleware/upload');
 
 async function getMaterials(req, res) {
   try {
-    const { branch, semester, subject, type, state, ownerId, search } = req.query;
+    const { branch, section, semester, subject, type, state, ownerId, search } = req.query;
     const user = req.user;
 
     let query = `
@@ -31,6 +31,12 @@ async function getMaterials(req, res) {
         query += ` AND m.semester = ?`;
         params.push(user.current_semester);
       }
+      if (user && user.section) {
+        query += ` AND (m.section = ? OR m.section = 'ALL' OR m.section IS NULL)`;
+        params.push(user.section);
+      } else {
+        query += ` AND (m.section = 'A' OR m.section = 'ALL' OR m.section IS NULL)`;
+      }
     } else if (user.role === 'faculty') {
       if (ownerId === 'me') {
         query += ` AND m.owner_id = ?`;
@@ -41,6 +47,10 @@ async function getMaterials(req, res) {
     if (branch && branch !== 'all') {
       query += ` AND m.branch = ?`;
       params.push(branch);
+    }
+    if (section && section !== 'all') {
+      query += ` AND (m.section = ? OR m.section = 'ALL')`;
+      params.push(section);
     }
     if (semester && semester !== 'all') {
       query += ` AND m.semester = ?`;
@@ -139,7 +149,21 @@ async function getMaterialById(req, res) {
 async function uploadMaterial(req, res) {
   try {
     const user = req.user;
-    const { title, description, subject, branch, branches, semester, regulation, type, state, tags } = req.body;
+    const { 
+      title, 
+      description, 
+      subject, 
+      branch, 
+      branches, 
+      section, 
+      sections, 
+      allocations, 
+      semester, 
+      regulation, 
+      type, 
+      state, 
+      tags 
+    } = req.body;
 
     if (!title || !subject || !semester || !type) {
       return res.status(400).json({ error: 'Missing required material metadata (title, subject, semester, type).' });
@@ -150,21 +174,45 @@ async function uploadMaterial(req, res) {
       return res.status(400).json({ error: 'At least one file is required.' });
     }
 
-    let targetBranches = [];
-    if (branches) {
-      targetBranches = Array.isArray(branches) ? branches : branches.split(',').map((b) => b.trim()).filter(Boolean);
+    // Build target allocations: array of { branch: string, section: string }
+    let targetAllocations = [];
+    if (allocations) {
+      try {
+        targetAllocations = typeof allocations === 'string' ? JSON.parse(allocations) : allocations;
+      } catch {
+        targetAllocations = [];
+      }
     }
-    if (!targetBranches.length && branch) {
-      targetBranches = [branch];
-    }
-    if (!targetBranches.length) {
-      targetBranches = ['CIC'];
+
+    if (!targetAllocations || !targetAllocations.length) {
+      let targetBranches = [];
+      if (branches) {
+        targetBranches = Array.isArray(branches) ? branches : branches.split(',').map((b) => b.trim()).filter(Boolean);
+      }
+      if (!targetBranches.length && branch) {
+        targetBranches = [branch];
+      }
+      if (!targetBranches.length) {
+        targetBranches = ['CIC'];
+      }
+
+      const parsedSections = sections 
+        ? (Array.isArray(sections) ? sections : sections.split(',').map((s) => s.trim()).filter(Boolean)) 
+        : (section ? [section] : ['ALL']);
+
+      for (const b of targetBranches) {
+        for (const sec of parsedSections) {
+          targetAllocations.push({ branch: b, section: sec || 'ALL' });
+        }
+      }
     }
 
     const parsedTags = typeof tags === 'string' ? tags.split(',').map((t) => t.trim()).filter(Boolean) : (tags || []);
     const createdMaterialIds = [];
 
-    for (const targetBranch of targetBranches) {
+    for (const alloc of targetAllocations) {
+      const targetBranch = alloc.branch;
+      const targetSection = alloc.section || 'ALL';
       const materialId = crypto.randomUUID();
 
       // Ensure branch, semester, regulation, and subject exist
@@ -178,14 +226,15 @@ async function uploadMaterial(req, res) {
 
       // Insert material
       await pool.query(
-        `INSERT INTO materials (id, title, description, subject, branch, semester, regulation, type, state, owner_id, tags)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO materials (id, title, description, subject, branch, section, semester, regulation, type, state, owner_id, tags)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           materialId,
           title,
           description || '',
           subject,
           targetBranch,
+          targetSection,
           parseInt(semester, 10),
           regulation || 'R23',
           type,
@@ -216,13 +265,13 @@ async function uploadMaterial(req, res) {
         'UPLOAD_MATERIAL',
         user.id,
         createdMaterialIds[0],
-        JSON.stringify({ title, filesCount: files.length, branches: targetBranches })
+        JSON.stringify({ title, filesCount: files.length, allocations: targetAllocations })
       ]
     ).catch(() => {});
 
     return res.json({
       success: true,
-      message: `Uploaded material successfully to ${targetBranches.length} branch(es).`,
+      message: `Uploaded material successfully to ${targetAllocations.length} cohort target(s).`,
       materialIds: createdMaterialIds,
     });
   } catch (err) {

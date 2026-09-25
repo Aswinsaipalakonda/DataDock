@@ -51,6 +51,7 @@ export default async function MaterialDetailsPage(props: PageProps) {
       created_at,
       subject,
       branch,
+      section,
       semester,
       state,
       users (name),
@@ -78,7 +79,14 @@ export default async function MaterialDetailsPage(props: PageProps) {
     ? `← Back to ${material.subject}` 
     : "← Back to Subjects";
 
-  if (!material || material.state === "deleted" || (!isFaculty && !isAdmin && material.state !== "published")) {
+  const studentSection = profile?.section || "A";
+  const studentBranch = profile?.branch || "CIC";
+  const hasAccess = isFaculty || isAdmin || (
+    material?.branch === studentBranch && 
+    (material?.section === studentSection || material?.section === "ALL" || !material?.section)
+  );
+
+  if (!material || material.state === "deleted" || (!isFaculty && !isAdmin && material.state !== "published") || !hasAccess) {
     return (
       <div className="p-4 sm:p-8 max-w-xl mx-auto space-y-4">
         <Link 
@@ -89,8 +97,8 @@ export default async function MaterialDetailsPage(props: PageProps) {
           <span>{returnLabel}</span>
         </Link>
         <div role="alert" className="p-6 bg-white border border-slate-200 rounded-3xl shadow-xs text-center space-y-2">
-          <p className="text-sm font-bold text-slate-900">Material Document Not Found</p>
-          <p className="text-xs text-slate-500 font-normal">The requested study file may have been archived or rescheduled.</p>
+          <p className="text-sm font-bold text-slate-900">Material Document Not Available</p>
+          <p className="text-xs text-slate-500 font-normal">This study file is designated for another class section or may have been updated.</p>
         </div>
       </div>
     );

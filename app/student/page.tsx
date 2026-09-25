@@ -54,6 +54,7 @@ export default async function StudentDashboard({
 
   const studentName = profile?.name || user.user_metadata?.name || user.email?.split("@")[0] || "Student";
   const branch = profile?.branch || "CIC";
+  const studentSection = profile?.section || "A";
   const branchFullName = getBranchFullName(branch);
   const rollNumber = profile?.roll_number || (user.email?.includes("@") ? user.email.split("@")[0].toUpperCase() : "23331A4701");
   
@@ -91,7 +92,7 @@ export default async function StudentDashboard({
 
   const subjectsCount = enrolledSubjectsCount ?? 0;
 
-  // 4. Fetch latest uploads in student scope matching selected semester (if not in Exam Lockout)
+  // 4. Fetch latest uploads in student scope matching selected semester and section (if not in Exam Lockout)
   let latestUploads: MaterialItem[] = [];
   if (!examLockout.isLocked) {
     const { data: dbLatestUploads } = await supabase
@@ -99,6 +100,7 @@ export default async function StudentDashboard({
       .select("id, title, type, created_at, subjects(title, code)")
       .eq("branch", branch)
       .eq("semester", selectedSemester)
+      .in("section", [studentSection, "ALL"])
       .eq("state", "published")
       .order("created_at", { ascending: false })
       .limit(6);

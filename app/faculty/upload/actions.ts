@@ -40,18 +40,35 @@ export async function uploadMaterialAction(formData: FormData) {
   const subject = (formData.get("subject") as string)?.trim();
   const subjectTitle = (formData.get("subjectTitle") as string)?.trim() || `${subject} Course`;
   const regulation = (formData.get("regulation") as string)?.trim() || "R23";
-  const rawBranches = formData.getAll("branches") as string[];
-  const singleBranch = (formData.get("branch") as string)?.trim();
-  const targetBranches = rawBranches.length > 0 ? rawBranches : [singleBranch || "CIC"];
   const semester = parseInt(formData.get("semester") as string, 10) || 3;
   const rawType = (formData.get("type") as string)?.trim();
   const state = (formData.get("state") as "draft" | "published") || "published";
   const tagsStr = formData.get("tags") as string;
   const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()).filter(Boolean) : [];
 
+  // Parse allocations JSON or fallback to rawBranches / singleBranch
+  const allocationsRaw = formData.get("allocations") as string;
+  let targetAllocations: Array<{ branch: string; section: string }> = [];
+
+  if (allocationsRaw) {
+    try {
+      targetAllocations = JSON.parse(allocationsRaw);
+    } catch {
+      targetAllocations = [];
+    }
+  }
+
+  if (!targetAllocations.length) {
+    const rawBranches = formData.getAll("branches") as string[];
+    const singleBranch = (formData.get("branch") as string)?.trim();
+    const rawSection = (formData.get("section") as string)?.trim() || "ALL";
+    const targetBranches = rawBranches.length > 0 ? rawBranches : [singleBranch || "CIC"];
+    targetAllocations = targetBranches.map(b => ({ branch: b, section: rawSection }));
+  }
+
   const normalizedType = normalizeMaterialType(rawType);
 
-  if (!title || !subject || targetBranches.length === 0 || !semester || !normalizedType || !state) {
+  if (!title || !subject || targetAllocations.length === 0 || !semester || !normalizedType || !state) {
     return { error: "Missing required taxonomy or content fields." };
   }
 
@@ -77,7 +94,7 @@ export async function uploadMaterialAction(formData: FormData) {
     }
   }
 
-  // Read buffers once for reuse across target branches if multiple
+  // Read buffers once for reuse across target branches/sections if multiple
   const fileBuffers: { file: File; buffer: ArrayBuffer; ext: string }[] = [];
   for (const file of validFiles) {
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
@@ -85,9 +102,10 @@ export async function uploadMaterialAction(formData: FormData) {
     fileBuffers.push({ file, buffer, ext });
   }
 
-  // Insert Material records per target branch (enforcing strict section isolation)
-  for (const branch of targetBranches) {
-    // Pre-generate deterministic UUID for material
+  // Insert Material records per target (branch, section) cohort
+  for (const alloc of targetAllocations) {
+    const branch = alloc.branch;
+    const section = alloc.section || "ALL";
     const materialId = crypto.randomUUID();
 
     const { error: insertError } = await supabase
@@ -98,6 +116,7 @@ export async function uploadMaterialAction(formData: FormData) {
         description,
         subject,
         branch,
+        section,
         semester,
         regulation,
         type: normalizedType,
@@ -149,6 +168,7 @@ export async function uploadMaterialAction(formData: FormData) {
       type: normalizedType, 
       subject, 
       branch, 
+      section,
       regulation, 
       filesCount: validFiles.length 
     });

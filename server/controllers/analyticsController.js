@@ -78,7 +78,53 @@ async function getAuditLogs(req, res) {
   }
 }
 
+const { createDatabaseBackup } = require('../database/backup');
+const path = require('path');
+const fs = require('fs');
+
+async function triggerBackup(req, res) {
+  try {
+    const result = await createDatabaseBackup();
+    if (result.success) {
+      return res.json({ success: true, message: 'Backup created successfully', result });
+    } else {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (err) {
+    console.error('triggerBackup error:', err);
+    return res.status(500).json({ error: 'Failed to create backup.' });
+  }
+}
+
+async function listBackups(req, res) {
+  try {
+    const backupDir = path.join(process.cwd(), 'backups');
+    if (!fs.existsSync(backupDir)) {
+      return res.json({ success: true, backups: [] });
+    }
+    const files = fs.readdirSync(backupDir)
+      .filter((f) => f.startsWith('backup_') && f.endsWith('.sql'))
+      .map((f) => {
+        const fp = path.join(backupDir, f);
+        const stats = fs.statSync(fp);
+        return {
+          filename: f,
+          sizeMb: (stats.size / (1024 * 1024)).toFixed(2),
+          createdAt: stats.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return res.json({ success: true, backups: files });
+  } catch (err) {
+    console.error('listBackups error:', err);
+    return res.status(500).json({ error: 'Failed to list backups.' });
+  }
+}
+
 module.exports = {
   getStats,
   getAuditLogs,
+  triggerBackup,
+  listBackups,
 };

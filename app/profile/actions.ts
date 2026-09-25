@@ -41,7 +41,7 @@ export async function updatePasswordAction(password: string) {
       first_login_pending: false,
       updated_at: new Date().toISOString()
     })
-    .or(`id.eq.${user.id},email.eq.${user.email}`);
+    .eq("id", user.id);
 
   // Record Security Audit Log
   await logAuditAction("USER_UPDATE_PASSWORD", user.email || user.id, { userId: user.id }, {

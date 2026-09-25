@@ -24,6 +24,7 @@ export default async function SubjectDetailPage(props: PageProps) {
   if (!user) return null;
 
   const studentBranch = profile?.branch || "CIC";
+  const studentSection = profile?.section || "A";
 
   // Fetch subject matching this course code and student's branch
   const { data: dbSubject } = await supabase
@@ -73,6 +74,7 @@ export default async function SubjectDetailPage(props: PageProps) {
       created_at, 
       tags,
       branch,
+      section,
       subject,
       material_files (
         id,
@@ -88,6 +90,7 @@ export default async function SubjectDetailPage(props: PageProps) {
     `)
     .eq("subject", code)
     .eq("branch", studentBranch)
+    .in("section", [studentSection, "ALL"])
     .eq("state", "published")
     .order("created_at", { ascending: false });
 
@@ -98,6 +101,7 @@ export default async function SubjectDetailPage(props: PageProps) {
       subject={subject}
       materials={materials}
       studentBranch={studentBranch}
+      studentSection={studentSection}
       initialType={selectedType || "All"}
       initialQuery={query}
       examLockout={examLockout}

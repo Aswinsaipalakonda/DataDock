@@ -55,6 +55,7 @@ interface SubjectMaterialsViewProps {
   subject: SubjectItem;
   materials: MaterialItem[];
   studentBranch: string;
+  studentSection?: string;
   initialType?: string;
   initialQuery?: string;
   examLockout: {
@@ -89,6 +90,7 @@ export default function SubjectMaterialsView({
   subject,
   materials,
   studentBranch,
+  studentSection = "A",
   initialType = "All",
   initialQuery = "",
   examLockout,
@@ -145,7 +147,7 @@ export default function SubjectMaterialsView({
               {subject.code}
             </span>
             <span className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-semibold">
-              Section {studentBranch} • Sem {subject.semester || 3}
+              {studentBranch} • Section {studentSection} • Sem {subject.semester || 3}
             </span>
           </div>
         </div>
@@ -157,7 +159,7 @@ export default function SubjectMaterialsView({
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-normal">
             Curated syllabus materials uploaded by faculty specifically for{" "}
-            <strong className="font-semibold text-slate-800">Section {studentBranch}</strong>.
+            <strong className="font-semibold text-slate-800">{studentBranch} Section {studentSection}</strong>.
           </p>
         </div>
 

@@ -42,11 +42,12 @@ export default async function FacultyUploadPage() {
   const { user, supabase } = await getCachedUserProfile();
   if (!user) redirect("/login");
 
-  // Fetch active regulations, subjects, and branches in parallel
-  const [regulationsRes, subjectsRes, branchesRes] = await Promise.all([
+  // Fetch active regulations, subjects, branches, and live student sections in parallel
+  const [regulationsRes, subjectsRes, branchesRes, usersRes] = await Promise.all([
     supabase.from("regulations").select("code, name").eq("active", true).order("code"),
     supabase.from("subjects").select("code, title, branch, semester, regulation").eq("active", true).order("code"),
     supabase.from("branches").select("code, name").eq("active", true).order("code"),
+    supabase.from("users").select("branch, current_semester, section").eq("role", "student"),
   ]);
 
   const activeRegulations = (regulationsRes.data && regulationsRes.data.length > 0)
@@ -58,6 +59,32 @@ export default async function FacultyUploadPage() {
   const activeBranches = (branchesRes.data && branchesRes.data.length > 0)
     ? (branchesRes.data as BranchOption[])
     : FALLBACK_BRANCHES;
+
+  // Build dynamic section dictionary per semester and branch: { [sem]: { [branch]: string[] } }
+  const dynamicSemesterSections: Record<number, Record<string, string[]>> = {};
+  const studentRows = (usersRes.data || []) as Array<{ branch?: string; current_semester?: number; section?: string }>;
+  
+  studentRows.forEach((st) => {
+    if (st.branch && st.section && st.current_semester) {
+      const sem = st.current_semester;
+      const b = st.branch.toUpperCase().trim();
+      const sec = st.section.toUpperCase().trim();
+      
+      if (!dynamicSemesterSections[sem]) dynamicSemesterSections[sem] = {};
+      if (!dynamicSemesterSections[sem][b]) dynamicSemesterSections[sem][b] = [];
+      if (!dynamicSemesterSections[sem][b].includes(sec)) {
+        dynamicSemesterSections[sem][b].push(sec);
+      }
+    }
+  });
+
+  // Sort sections alphabetically
+  Object.keys(dynamicSemesterSections).forEach((semStr) => {
+    const sem = parseInt(semStr, 10);
+    Object.keys(dynamicSemesterSections[sem]).forEach((b) => {
+      dynamicSemesterSections[sem][b].sort();
+    });
+  });
 
   return (
     <div className="space-y-6 sm:space-y-7 w-full max-w-5xl pb-10">
@@ -82,6 +109,7 @@ export default async function FacultyUploadPage() {
         regulations={activeRegulations} 
         subjects={activeSubjects} 
         branches={activeBranches}
+        dynamicSections={dynamicSemesterSections}
       />
     </div>
   );

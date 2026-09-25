@@ -99,6 +99,7 @@ interface UploadFormProps {
   regulations: RegulationOption[];
   subjects: SubjectOption[];
   branches?: { code: string; name: string }[];
+  dynamicSections?: Record<number, Record<string, string[]>>;
 }
 
 const MATERIAL_TYPES = [
@@ -123,7 +124,7 @@ function formatOptionLabel(code: string, rawTitle: string, branches: string[]) {
   return `${cleanCode} - ${truncatedTitle} ${branchTag}`.trim();
 }
 
-export default function UploadForm({ regulations, subjects, branches = [] }: UploadFormProps) {
+export default function UploadForm({ regulations, subjects, branches = [], dynamicSections }: UploadFormProps) {
   // 4-Step Progressive Workflow:
   // Step 1: Regulation & Semester
   // Step 2: Subject & Branch Allocation
@@ -174,14 +175,59 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
     return defaultDepartmentBranches;
   }, [branches]);
 
+  const BRANCH_SECTIONS_CONFIG: Record<string, string[]> = {
+    CSM: ["A", "B"],
+    CIC: ["A"],
+    CSD: ["A"],
+  };
+
+  // Dynamically resolve available sections for any branch and semester
+  const getAvailableSectionsForBranch = (bCode: string) => {
+    if (selectedSemester && dynamicSections?.[selectedSemester]?.[bCode]?.length) {
+      return dynamicSections[selectedSemester][bCode];
+    }
+    if (dynamicSections) {
+      const allSecs = new Set<string>();
+      Object.values(dynamicSections).forEach((semMap) => {
+        if (semMap[bCode]) {
+          semMap[bCode].forEach((s) => allSecs.add(s));
+        }
+      });
+      if (allSecs.size > 0) {
+        return Array.from(allSecs).sort();
+      }
+    }
+    return BRANCH_SECTIONS_CONFIG[bCode] || ["A"];
+  };
+
   // Step 1 State: Regulation & Semester
   const defaultReg = regulations.find(r => r.code === "R23")?.code || regulations[0]?.code || "R23";
   const [selectedRegulation, setSelectedRegulation] = useState(defaultReg);
   const [selectedSemester, setSelectedSemester] = useState<number | null>(null);
 
-  // Step 2 State: Subject & Branch
+  // Step 2 State: Subject, Branch & Section Allocations
   const [selectedSubjectCode, setSelectedSubjectCode] = useState("");
   const [targetBranches, setTargetBranches] = useState<string[]>([]);
+  const [selectedSectionsByBranch, setSelectedSectionsByBranch] = useState<Record<string, string[]>>({
+    CSM: ["A", "B"],
+    CIC: ["A"],
+    CSD: ["A"],
+  });
+
+  // Calculate concrete target allocations: Array<{ branch: string; section: string }>
+  const targetAllocations = useMemo(() => {
+    const allocs: Array<{ branch: string; section: string }> = [];
+    for (const bCode of targetBranches) {
+      const available = getAvailableSectionsForBranch(bCode);
+      const chosen = selectedSectionsByBranch[bCode] || available;
+      for (const sec of chosen) {
+        if (available.includes(sec)) {
+          allocs.push({ branch: bCode, section: sec });
+        }
+      }
+    }
+    return allocs;
+  }, [targetBranches, selectedSectionsByBranch]);
 
   // Step 3 State: Details & Files
   const [title, setTitle] = useState("");
@@ -265,37 +311,96 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
   const handleSubjectChange = (code: string) => {
     setSelectedSubjectCode(code);
     const sub = groupedSubjects.find(s => s.code === code);
-    if (sub && sub.branches.length > 0) {
-      setTargetBranches([...sub.branches]);
+    const validBranches = (sub && sub.branches.length > 0) ? sub.branches : activeBranchesList.map(b => b.code);
+    
+    setTargetBranches([...validBranches]);
+    const initSections: Record<string, string[]> = {};
+    for (const b of validBranches) {
+      initSections[b] = [...getAvailableSectionsForBranch(b)];
+    }
+    setSelectedSectionsByBranch(prev => ({ ...prev, ...initSections }));
+  };
+
+  // Toggle whole branch
+  const toggleBranch = (bCode: string) => {
+    if (targetBranches.includes(bCode)) {
+      if (targetBranches.length === 1) return; // Keep at least one branch selected
+      setTargetBranches(prev => prev.filter(b => b !== bCode));
     } else {
-      setTargetBranches(activeBranchesList.map(b => b.code));
+      setTargetBranches(prev => [...prev, bCode]);
+      const available = getAvailableSectionsForBranch(bCode);
+      setSelectedSectionsByBranch(prev => ({
+        ...prev,
+        [bCode]: prev[bCode]?.length ? prev[bCode] : [...available],
+      }));
     }
   };
 
-  // Isolate allocation to a single specific branch (e.g. CSM students only)
-  const isolateToBranch = (bCode: string) => {
-    setTargetBranches([bCode]);
-  };
+  // Toggle specific section within a branch
+  const toggleSection = (bCode: string, sectionName: string) => {
+    const isBranchActive = targetBranches.includes(bCode);
+    const currentSections = selectedSectionsByBranch[bCode] || getAvailableSectionsForBranch(bCode);
 
-  // Target Branch checkbox toggle
-  const toggleBranch = (bCode: string) => {
-    setTargetBranches(prev => {
-      if (prev.includes(bCode)) {
-        if (prev.length === 1) return prev; // Keep at least one branch selected
-        return prev.filter(b => b !== bCode);
+    let updatedSections: string[];
+    if (currentSections.includes(sectionName)) {
+      updatedSections = currentSections.filter(s => s !== sectionName);
+    } else {
+      updatedSections = [...currentSections, sectionName];
+    }
+
+    if (updatedSections.length === 0) {
+      // If no sections remain for this branch, deactivate branch if multiple branches exist
+      if (targetBranches.length > 1) {
+        setTargetBranches(prev => prev.filter(b => b !== bCode));
       } else {
-        return [...prev, bCode];
+        // Keep at least this section
+        return;
       }
-    });
+    } else {
+      if (!isBranchActive) {
+        setTargetBranches(prev => [...prev, bCode]);
+      }
+    }
+
+    setSelectedSectionsByBranch(prev => ({
+      ...prev,
+      [bCode]: updatedSections,
+    }));
   };
 
-  // Toggle All Branches for current subject
-  const selectAllBranches = () => {
+  // Quick isolate presets
+  const isolateToBranchAndSection = (bCode: string, sectionName?: string) => {
+    setTargetBranches([bCode]);
+    if (sectionName && sectionName !== "ALL") {
+      setSelectedSectionsByBranch(prev => ({
+        ...prev,
+        [bCode]: [sectionName],
+      }));
+    } else {
+      setSelectedSectionsByBranch(prev => ({
+        ...prev,
+        [bCode]: [...getAvailableSectionsForBranch(bCode)],
+      }));
+    }
+  };
+
+  // Toggle All Branches and Sections
+  const selectAllBranchesAndSections = () => {
     const allCodes = activeBranchesList.map(b => b.code);
-    if (targetBranches.length === allCodes.length) {
+    if (targetBranches.length === allCodes.length && targetAllocations.length >= 4) {
+      // Isolate to CSM Section A & B
       setTargetBranches(["CSM"]);
+      setSelectedSectionsByBranch(prev => ({
+        ...prev,
+        CSM: ["A", "B"],
+      }));
     } else {
       setTargetBranches([...allCodes]);
+      const allSecs: Record<string, string[]> = {};
+      for (const b of allCodes) {
+        allSecs[b] = [...getAvailableSectionsForBranch(b)];
+      }
+      setSelectedSectionsByBranch(prev => ({ ...prev, ...allSecs }));
     }
   };
 
@@ -364,7 +469,7 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
 
   // Step Validation Flags
   const isStep1Valid = Boolean(selectedRegulation && selectedSemester !== null);
-  const isStep2Valid = Boolean(selectedSubjectCode && targetBranches.length > 0);
+  const isStep2Valid = Boolean(selectedSubjectCode && targetAllocations.length > 0);
   const isStep3Valid = Boolean(title.trim() && type && files.length > 0);
 
   // Stepper Next Handler
@@ -384,8 +489,8 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
         setError("Please select a course subject from the list.");
         return;
       }
-      if (targetBranches.length === 0) {
-        setError("Please select at least one target section/branch.");
+      if (targetAllocations.length === 0) {
+        setError("Please select at least one target branch and section.");
         return;
       }
     } else if (step === 3) {
@@ -424,6 +529,9 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
       formData.append("state", finalState);
       formData.append("tags", tagsStr);
       
+      // Append target allocations as JSON
+      formData.append("allocations", JSON.stringify(targetAllocations));
+
       targetBranches.forEach(b => {
         formData.append("branches", b);
       });
@@ -716,32 +824,58 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
                     <Users className="h-4 w-4 text-blue-700" />
-                    <span>Destination Section / Branch Allocation *</span>
+                    <span>Target Branches & Class Sections *</span>
                   </h4>
                   <p className="text-xs text-blue-700/80 mt-0.5">
-                    Select target branches. Study material will <span className="font-bold underline">only</span> be visible to students in these sections.
+                    Select target branches and specific sections. Material will <span className="font-bold underline">only</span> be visible to students in selected sections.
                   </p>
                 </div>
 
                 {/* Quick Presets */}
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => isolateToBranch("CSM")}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
-                      targetBranches.length === 1 && targetBranches[0] === "CSM"
+                    onClick={() => isolateToBranchAndSection("CSM", "ALL")}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
+                      targetBranches.length === 1 && targetBranches[0] === "CSM" && (selectedSectionsByBranch.CSM?.length || 0) >= 2
                         ? "bg-purple-600 text-white border-purple-600 shadow-2xs"
                         : "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"
                     }`}
-                    title="Target only CSM students"
+                    title="Target both CSM Section A and B"
                   >
-                    Target Only CSM
+                    CSM (Both A & B)
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => isolateToBranch("CIC")}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                    onClick={() => isolateToBranchAndSection("CSM", "A")}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
+                      targetBranches.length === 1 && targetBranches[0] === "CSM" && selectedSectionsByBranch.CSM?.length === 1 && selectedSectionsByBranch.CSM[0] === "A"
+                        ? "bg-purple-700 text-white border-purple-700 shadow-2xs"
+                        : "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"
+                    }`}
+                    title="Target only CSM Section A"
+                  >
+                    CSM: Sec A Only
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => isolateToBranchAndSection("CSM", "B")}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
+                      targetBranches.length === 1 && targetBranches[0] === "CSM" && selectedSectionsByBranch.CSM?.length === 1 && selectedSectionsByBranch.CSM[0] === "B"
+                        ? "bg-purple-700 text-white border-purple-700 shadow-2xs"
+                        : "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"
+                    }`}
+                    title="Target only CSM Section B"
+                  >
+                    CSM: Sec B Only
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => isolateToBranchAndSection("CIC", "A")}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
                       targetBranches.length === 1 && targetBranches[0] === "CIC"
                         ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
                         : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
@@ -753,8 +887,8 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
 
                   <button
                     type="button"
-                    onClick={() => isolateToBranch("CSD")}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                    onClick={() => isolateToBranchAndSection("CSD", "A")}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer border ${
                       targetBranches.length === 1 && targetBranches[0] === "CSD"
                         ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
                         : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
@@ -766,77 +900,160 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
 
                   <button
                     type="button"
-                    onClick={selectAllBranches}
-                    className="text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline cursor-pointer px-1 py-1"
+                    onClick={selectAllBranchesAndSections}
+                    className="text-[11px] font-bold text-blue-700 hover:text-blue-900 hover:underline cursor-pointer px-1 py-1"
                   >
-                    {targetBranches.length === activeBranchesList.length ? "Deselect All" : "Select All"}
+                    {targetAllocations.length >= 4 ? "Reset Target" : "Select All"}
                   </button>
                 </div>
               </div>
 
-              {/* Branch / Section Selection Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Branch & Section Interactive Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 {activeBranchesList.map((branchItem) => {
-                  const isSelected = targetBranches.includes(branchItem.code);
+                  const isBranchSelected = targetBranches.includes(branchItem.code);
+                  const availableSections = getAvailableSectionsForBranch(branchItem.code);
+                  const chosenSections = selectedSectionsByBranch[branchItem.code] || [];
+                  const isMultiSection = availableSections.length > 1;
+
                   return (
-                    <button
+                    <div
                       key={branchItem.code}
-                      type="button"
-                      onClick={() => toggleBranch(branchItem.code)}
-                      className={`p-3.5 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between gap-2.5 border text-left ${
-                        isSelected
-                          ? "bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-500/20"
-                          : "bg-white text-slate-700 border-slate-200/90 hover:border-blue-400 hover:bg-blue-50/50"
+                      className={`p-4 rounded-2xl transition-all border flex flex-col justify-between gap-3 ${
+                        isBranchSelected
+                          ? "bg-white border-blue-400 shadow-sm ring-2 ring-blue-500/15"
+                          : "bg-white/70 border-slate-200/90 hover:border-slate-300 hover:bg-white"
                       }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {isSelected ? (
-                          <div className="w-4 h-4 rounded-full bg-white text-blue-600 flex items-center justify-center shrink-0">
-                            <Check className="h-3 w-3 stroke-[3]" />
+                      {/* Branch Header Row with Toggle */}
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleBranch(branchItem.code)}
+                          className="flex items-center gap-2.5 min-w-0 text-left cursor-pointer flex-1"
+                        >
+                          <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                            isBranchSelected
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "border-slate-300 bg-white"
+                          }`}>
+                            {isBranchSelected && <Check className="h-3 w-3 stroke-[3]" />}
                           </div>
-                        ) : (
-                          <span className="w-4 h-4 rounded-full border-2 border-slate-300 inline-block shrink-0" />
-                        )}
-                        <div className="min-w-0">
-                          <span className="block font-bold">Section {branchItem.code}</span>
-                          <span className={`text-[10px] font-normal block truncate ${isSelected ? "text-blue-100" : "text-slate-500"}`}>
-                            {branchItem.name}
+                          <div className="min-w-0">
+                            <span className="block font-bold text-slate-900 text-xs sm:text-sm">
+                              Branch {branchItem.code}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-normal block truncate">
+                              {branchItem.name}
+                            </span>
+                          </div>
+                        </button>
+
+                        {branchItem.code === "CSM" && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+                            AI & ML
                           </span>
+                        )}
+                      </div>
+
+                      {/* Section Selector Pills */}
+                      <div className="pt-2 border-t border-slate-100/90 flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Class Sections:
+                          </span>
+                          {isMultiSection && isBranchSelected && (
+                            <span className="text-[10px] text-blue-600 font-semibold">
+                              {chosenSections.length === availableSections.length
+                                ? "All Sections Selected"
+                                : chosenSections.length === 1
+                                ? `Section ${chosenSections[0]} Only`
+                                : "Custom Selection"}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {availableSections.map((sec) => {
+                            const isSecActive = isBranchSelected && chosenSections.includes(sec);
+                            return (
+                              <button
+                                key={`${branchItem.code}-${sec}`}
+                                type="button"
+                                onClick={() => toggleSection(branchItem.code, sec)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                                  isSecActive
+                                    ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+                                }`}
+                              >
+                                <span className={`w-3 h-3 rounded-full flex items-center justify-center shrink-0 text-[9px] ${
+                                  isSecActive ? "bg-white/20 text-white" : "border border-slate-400"
+                                }`}>
+                                  {isSecActive ? "✓" : ""}
+                                </span>
+                                <span>Section {sec}</span>
+                              </button>
+                            );
+                          })}
+
+                          {isMultiSection && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const areAll = chosenSections.length === availableSections.length;
+                                if (areAll) {
+                                  // Switch to only section A
+                                  toggleSection(branchItem.code, "B");
+                                } else {
+                                  // Select all sections
+                                  setSelectedSectionsByBranch(prev => ({
+                                    ...prev,
+                                    [branchItem.code]: [...availableSections],
+                                  }));
+                                  if (!isBranchSelected) {
+                                    setTargetBranches(prev => [...prev, branchItem.code]);
+                                  }
+                                }
+                              }}
+                              className="px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-blue-700 hover:bg-blue-50 cursor-pointer"
+                            >
+                              {chosenSections.length === availableSections.length ? "Only Sec A" : "All Secs"}
+                            </button>
+                          )}
                         </div>
                       </div>
-                      {branchItem.code === "CSM" && (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                          isSelected ? "bg-white/20 text-white" : "bg-purple-50 text-purple-700 border border-purple-200"
-                        }`}>
-                          AI & ML
-                        </span>
-                      )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
 
               {/* Dynamic Isolation Confirmation Banner */}
-              {targetBranches.length === 1 && targetBranches[0] === "CSM" ? (
+              {targetAllocations.length === 1 ? (
                 <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center gap-2.5 text-xs text-emerald-900 animate-in fade-in">
                   <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
                   <span>
-                    <strong>Strict CSM Isolation Active:</strong> Uploading exclusively for <strong>Section CSM (AI & ML) students</strong>. Students in CIC and CSD sections will have zero access.
+                    <strong>Strict Section Isolation Active:</strong> Uploading exclusively for{" "}
+                    <strong>{targetAllocations[0].branch} Section {targetAllocations[0].section}</strong> students. Students in other sections and branches will have zero access.
                   </span>
                 </div>
               ) : targetBranches.length === 1 ? (
                 <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center gap-2.5 text-xs text-emerald-900 animate-in fade-in">
                   <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
                   <span>
-                    <strong>Strict Isolation Active:</strong> Uploading exclusively for <strong>Section {targetBranches[0]} students</strong>.
+                    <strong>{targetBranches[0]} Department Delivery:</strong> Uploading for{" "}
+                    <strong>{targetBranches[0]} (Sections {selectedSectionsByBranch[targetBranches[0]]?.join(", ")})</strong> ({targetAllocations.length} cohort sections).
                   </span>
                 </div>
               ) : (
                 <div className="p-3 bg-white/95 rounded-2xl border border-blue-100 flex items-center gap-2.5 text-xs text-slate-700">
                   <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
                   <span>
-                    <span className="font-bold text-slate-900">Multi-Section Delivery:</span> Uploading for{" "}
-                    <span className="font-bold text-blue-700">{targetBranches.join(", ")}</span> ({targetBranches.length} sections).
+                    <span className="font-bold text-slate-900">Multi-Cohort Delivery:</span> Uploading for{" "}
+                    <span className="font-bold text-blue-700">
+                      {targetAllocations.map(a => `${a.branch}-${a.section}`).join(", ")}
+                    </span>{" "}
+                    ({targetAllocations.length} distinct class sections).
                   </span>
                 </div>
               )}
@@ -1101,18 +1318,26 @@ export default function UploadForm({ regulations, subjects, branches = [] }: Upl
                 <span className="text-[11px] text-slate-500 truncate block">{currentSubject?.title}</span>
               </div>
               <div className="p-3 bg-white rounded-xl border border-slate-200/70">
-                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Destination Sections</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Target Cohort Sections</span>
                 <span className="font-bold text-blue-700 text-sm mt-0.5 block">
-                  {targetBranches.join(", ")} ({targetBranches.length} {targetBranches.length === 1 ? "section" : "sections"})
+                  {targetAllocations.map(a => `${a.branch} (Sec ${a.section})`).join(", ")}
                 </span>
+                <span className="text-[11px] text-slate-500 block">{targetAllocations.length} distinct section {targetAllocations.length === 1 ? "target" : "targets"}</span>
               </div>
             </div>
 
-            {targetBranches.length === 1 && (
+            {targetAllocations.length === 1 ? (
               <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center gap-2.5 text-xs text-emerald-900 animate-in fade-in">
                 <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
                 <span>
-                  <strong>Strict Section Isolation:</strong> Target Branches set to <strong>{targetBranches[0]} (1 section)</strong>. This material will strictly be delivered to students of <strong>Section {targetBranches[0]}</strong> only.
+                  <strong>Strict Section Isolation:</strong> Target set exclusively to <strong>{targetAllocations[0].branch} Section {targetAllocations[0].section}</strong>. Students in other sections will have zero access to this material.
+                </span>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200/80 flex items-center gap-2.5 text-xs text-blue-900">
+                <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>
+                  <strong>Multi-Section Delivery:</strong> Delivering to <strong>{targetAllocations.map(a => `${a.branch}-${a.section}`).join(", ")}</strong> ({targetAllocations.length} class sections).
                 </span>
               </div>
             )}

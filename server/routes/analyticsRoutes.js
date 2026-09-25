@@ -7,5 +7,7 @@ router.use(authenticate, authorizeRoles('admin'));
 
 router.get('/stats', analyticsController.getStats);
 router.get('/logs', analyticsController.getAuditLogs);
+router.get('/backups', analyticsController.listBackups);
+router.post('/backups/trigger', analyticsController.triggerBackup);
 
 module.exports = router;
