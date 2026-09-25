@@ -32,4 +32,24 @@ if (process.env.NODE_ENV !== 'production') {
   }
 }
 
+// Perform safe non-destructive schema migration check
+if (typeof window === 'undefined') {
+  pool.getConnection().then(async (conn) => {
+    try {
+      const [columns]: any = await conn.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'materials' AND COLUMN_NAME = 'section'"
+      );
+      if (Array.isArray(columns) && columns.length === 0) {
+        console.log('Migrating database: Adding `section` column to `materials` table...');
+        await conn.query("ALTER TABLE materials ADD COLUMN section VARCHAR(50) NOT NULL DEFAULT 'ALL' AFTER semester");
+        console.log('✓ Added `section` column to `materials` table.');
+      }
+    } catch (err: any) {
+      // Ignore during initial setup or build
+    } finally {
+      conn.release();
+    }
+  }).catch(() => {});
+}
+
 export default pool;

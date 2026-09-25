@@ -15,8 +15,20 @@ const pool = mysql.createPool({
 });
 
 pool.getConnection()
-  .then((conn) => {
+  .then(async (conn) => {
     console.log('✓ MySQL connection pool established successfully.');
+    try {
+      const [columns] = await conn.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'materials' AND COLUMN_NAME = 'section'"
+      );
+      if (columns.length === 0) {
+        console.log('Migrating database: Adding `section` column to `materials` table...');
+        await conn.query("ALTER TABLE materials ADD COLUMN section VARCHAR(50) NOT NULL DEFAULT 'ALL' AFTER semester");
+        console.log('✓ Added `section` column to `materials` table.');
+      }
+    } catch (migErr) {
+      console.warn('Auto-migration warning:', migErr.message);
+    }
     conn.release();
   })
   .catch((err) => {
