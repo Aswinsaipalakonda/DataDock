@@ -5,7 +5,7 @@ declare global {
   var __mysql_pool: mysql.Pool | undefined;
 }
 
-const host = process.env.DB_HOST || 'localhost';
+const host = process.env.DB_HOST || '127.0.0.1';
 
 const pool =
   global.__mysql_pool ||
@@ -20,6 +20,8 @@ const pool =
     queueLimit: 0,
     enableKeepAlive: true,
     connectTimeout: 15000,
+    timezone: 'Z',
+    dateStrings: true,
   });
 
 if (process.env.NODE_ENV !== 'production') {

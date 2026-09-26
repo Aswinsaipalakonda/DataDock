@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { uploadMaterialAction } from "./actions";
 import { 
   ArrowLeft, 
@@ -129,7 +130,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
   // Step 1: Regulation & Semester
   // Step 2: Subject & Branch Allocation
   // Step 3: Material Details & Files
-  // Step 4: Review & Publish
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -544,6 +545,12 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
       if (result?.error) {
         setError(result.error);
         setLoading(false);
+      } else if (result?.success) {
+        router.push(result.redirectUrl || "/faculty/materials");
+        router.refresh();
+      } else {
+        router.push("/faculty/materials");
+        router.refresh();
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred while uploading.");

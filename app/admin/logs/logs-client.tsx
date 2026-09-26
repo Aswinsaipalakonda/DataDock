@@ -34,8 +34,56 @@ export interface AuditLogItem {
   } | null;
 }
 
-interface LogsClientProps {
+export interface LogsClientProps {
   initialLogs: AuditLogItem[];
+}
+
+// Safely parse a date from ISO string or MySQL datetime string
+export function parseTimestamp(rawDate: string | Date | undefined | null): Date {
+  if (!rawDate) return new Date();
+  if (rawDate instanceof Date) return rawDate;
+  
+  let str = String(rawDate).trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(str)) {
+    str = str.replace(" ", "T") + "Z";
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(str)) {
+    str = str + "Z";
+  }
+  
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
+export function formatLogDate(rawDate: string | Date | undefined | null): string {
+  const d = parseTimestamp(rawDate);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export function formatLogTime(rawDate: string | Date | undefined | null): string {
+  const d = parseTimestamp(rawDate);
+  return d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
+export function formatLogFullDateTime(rawDate: string | Date | undefined | null): string {
+  const d = parseTimestamp(rawDate);
+  return d.toLocaleString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
 }
 
 // Convert technical action names to human-readable titles
@@ -236,7 +284,7 @@ export default function LogsClient({ initialLogs }: LogsClientProps) {
     try {
       const headers = ["Activity Timestamp", "Activity Type", "Initiated By", "Actor Email", "Target Account / Reference"];
       const rows = filteredLogs.map((l) => [
-        `"${new Date(l.created_at).toLocaleString()}"`,
+        `"${formatLogFullDateTime(l.created_at)}"`,
         `"${formatActionTitle(l.action)}"`,
         `"${l.users?.name || "System Administrator"}"`,
         `"${l.users?.email || "admin@mvgrce.edu.in"}"`,
@@ -392,11 +440,11 @@ export default function LogsClient({ initialLogs }: LogsClientProps) {
                       <td className="py-3.5 pl-6 pr-4 whitespace-nowrap">
                         <div className="space-y-0.5">
                           <span className="font-semibold text-slate-900 block">
-                            {new Date(log.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            {formatLogDate(log.created_at)}
                           </span>
                           <span className="text-[11px] text-slate-400 flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            <span>{new Date(log.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true })}</span>
+                            <span>{formatLogTime(log.created_at)}</span>
                           </span>
                         </div>
                       </td>
@@ -598,15 +646,7 @@ export default function LogsClient({ initialLogs }: LogsClientProps) {
                       Activity Timestamp
                     </span>
                     <span className="text-xs font-bold text-slate-900 block">
-                      {new Date(selectedLog.created_at).toLocaleString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                        second: "2-digit",
-                        hour12: true,
-                      })}
+                      {formatLogFullDateTime(selectedLog.created_at)}
                     </span>
                   </div>
                 </div>

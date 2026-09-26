@@ -360,13 +360,18 @@ class MySQLQueryBuilder {
       const sql = `SELECT ${selectClause} FROM \`${this.tableName}\` ${whereSql} ${orderSql} ${limitSql}`.trim();
       const [rows]: any = await pool.query(sql, params);
 
-      // Expand JSON fields automatically
+      // Expand JSON fields & normalize datetime fields automatically
       for (const row of rows) {
         for (const key of Object.keys(row)) {
-          if (typeof row[key] === 'string' && (row[key].startsWith('{') || row[key].startsWith('['))) {
+          const val = row[key];
+          if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
             try {
-              row[key] = JSON.parse(row[key]);
+              row[key] = JSON.parse(val);
             } catch {}
+          } else if (val instanceof Date) {
+            row[key] = val.toISOString();
+          } else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(val)) {
+            row[key] = val.replace(' ', 'T') + 'Z';
           }
         }
       }
@@ -496,8 +501,12 @@ class MySQLQueryBuilder {
 
       return { data: rows, count: totalCount ?? rows.length, error: null };
     } catch (err: any) {
-      console.error(`MySQLQueryBuilder error on [${this.tableName}]:`, err.message);
-      return { data: null, count: null, error: { message: err.message, code: err.code } };
+      console.warn(`[Database Notice] MySQLQueryBuilder on [${this.tableName}]: ${err.message}`);
+      return { 
+        data: (this.isSingle || this.isMaybeSingle) ? null : [], 
+        count: 0, 
+        error: { message: err.message, code: err.code } 
+      };
     }
   }
 
