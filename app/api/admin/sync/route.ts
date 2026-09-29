@@ -99,7 +99,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. Query updated database counts
+    // 5. Cleanup obsolete/dropped students for Sem 3, 5, 7
+    const validRollNumbers = studentRoster.map((st: any) => st.rollNumber).filter(Boolean);
+    let deletedCount = 0;
+    if (validRollNumbers.length > 0) {
+      const [delResult]: any = await pool.query(
+        `DELETE FROM users WHERE role = 'student' AND current_semester IN (3, 5, 7) AND roll_number NOT IN (?)`,
+        [validRollNumbers]
+      );
+      deletedCount = delResult?.affectedRows || 0;
+    }
+
+    // 6. Query updated database counts
     const [totStudents]: any = await pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'student'");
     const [totSubjects]: any = await pool.query("SELECT COUNT(*) as count FROM subjects");
     const [totFaculty]: any = await pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'faculty'");
@@ -110,6 +121,7 @@ export async function POST(req: NextRequest) {
       subjectsUpserted: totalSubjectsUpserted,
       totalSubjectsInDB: totSubjects[0]?.count || 0,
       studentsUpserted: insertedStudents,
+      orphanedStudentsRemoved: deletedCount,
       totalStudentsInDB: totStudents[0]?.count || 0,
       totalFacultyInDB: totFaculty[0]?.count || 0,
     });
