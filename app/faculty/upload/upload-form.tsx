@@ -426,7 +426,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
       ".zip", ".rar", ".7z", ".tar", ".gz",
       ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"
     ];
-    const maxFileSize = 100 * 1024 * 1024; // 100 MB
+    const maxFileSize = 150 * 1024 * 1024; // 150 MB
 
     const validNewFiles: File[] = [];
     for (const f of incomingFiles) {
@@ -436,7 +436,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
         return;
       }
       if (f.size > maxFileSize) {
-        setError(`File "${f.name}" exceeds 100 MB limit.`);
+        setError(`File "${f.name}" exceeds 150 MB limit.`);
         return;
       }
       validNewFiles.push(f);
@@ -553,7 +553,12 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
         router.refresh();
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred while uploading.");
+      const rawMsg = err instanceof Error ? err.message : "";
+      if (rawMsg.includes("441") || rawMsg.includes("Minified React error")) {
+        setError("Failed to complete upload on the server. The files may exceed the server upload limit or the network timed out. Please try again with smaller files or verify server status.");
+      } else {
+        setError(rawMsg || "An unexpected error occurred while uploading.");
+      }
       setLoading(false);
     }
   };
@@ -1218,7 +1223,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
                   Click to select or drag and drop study materials
                 </p>
                 <p className="text-[11px] sm:text-xs text-slate-500 font-normal">
-                  Supported: <span className="font-semibold text-slate-700">PDF, PowerPoint, Excel, Coding files, Word, ZIP, Images</span> (Up to 100MB each)
+                  Supported: <span className="font-semibold text-slate-700">PDF, PowerPoint, Excel, Coding files, Word, ZIP, Images</span> (Up to 150MB each)
                 </p>
               </div>
             </div>

@@ -98,12 +98,17 @@ const startServer = async () => {
     }
   }
 
+const { syncStudentsSafely } = require('./database/sync-students-helper');
+
   server.listen(port, () => {
     console.log(`\n======================================================`);
     console.log(`🚀 DE E-Learn Express API running at: http://localhost:${port}`);
     console.log(`🏥 Health check:                      http://localhost:${port}/api/health`);
     console.log(`📁 Uploads stored at:                 ${uploadBaseDir}`);
     console.log(`======================================================\n`);
+
+    // Non-blocking safe student sync for production/staging database
+    syncStudentsSafely().catch(err => console.warn('[Auto-sync notice]:', err.message));
   });
 };
 

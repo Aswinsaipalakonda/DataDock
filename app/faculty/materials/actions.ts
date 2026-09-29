@@ -219,14 +219,14 @@ export async function attachFileToMaterial(formData: FormData) {
     return { error: "Material ID and a valid file are required." };
   }
 
-  const maxFileSize = 100 * 1024 * 1024; // 100MB
+  const maxFileSize = 150 * 1024 * 1024; // 150MB
   const ext = "." + file.name.split(".").pop()?.toLowerCase();
 
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return { error: `File type "${ext}" is not supported. Supported: PDF, PPT, Word, Excel, Code, ZIP, TXT, and Images.` };
   }
   if (file.size > maxFileSize) {
-    return { error: "File exceeds 100MB limit." };
+    return { error: "File exceeds 150MB limit." };
   }
 
   const uniqueId = crypto.randomUUID();
@@ -313,14 +313,14 @@ export async function replaceFileVersion(formData: FormData) {
     return { error: "Required fields or file are missing." };
   }
 
-  const maxFileSize = 100 * 1024 * 1024; // 100MB
+  const maxFileSize = 150 * 1024 * 1024; // 150MB
   const ext = "." + file.name.split(".").pop()?.toLowerCase();
 
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return { error: `File type "${ext}" is not supported. Supported: PDF, PPT, Word, Excel, Code, ZIP, TXT, and Images.` };
   }
   if (file.size > maxFileSize) {
-    return { error: "File exceeds 100MB limit." };
+    return { error: "File exceeds 150MB limit." };
   }
 
   // Fetch current version of the file

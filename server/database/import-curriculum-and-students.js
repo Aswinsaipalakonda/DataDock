@@ -175,32 +175,50 @@ async function main() {
     // -------------------------------------------------------------------------
     console.log('\n--- Step 4: Parsing Student Rosters ---');
 
+    const hasIIISemMaster = fs.existsSync(path.join(DATA_DIR, 'IIISem.xlsx'));
+
     const studentConfigs = [
-      // Semester 3 (Batch 2025)
-      {
-        file: 'III_SEM (CIC).xlsx',
-        branch: 'CIC',
-        sem: 3,
-        year: 2025,
-        sheets: [{ name: 'CIC', sec: 'A' }],
-      },
-      {
-        file: 'III_SEM_CSE(AIML).xlsx',
-        branch: 'CSM',
-        sem: 3,
-        year: 2025,
-        sheets: [
-          { name: 'CSE(AIML)_A', sec: 'A' },
-          { name: 'CSE(AIML)_B', sec: 'B' },
-        ],
-      },
-      {
-        file: 'III_SEM_CSE(DS).xlsx',
-        branch: 'CSD',
-        sem: 3,
-        year: 2025,
-        sheets: [{ name: 'III_CSD', sec: 'A' }],
-      },
+      // Semester 3 (Batch 2025 + Lateral Entries 2026)
+      ...(hasIIISemMaster
+        ? [
+            {
+              file: 'IIISem.xlsx',
+              branch: 'CSM',
+              sem: 3,
+              year: 2025,
+              sheets: [
+                { name: 'Sheet1', defaultBranch: 'CSM', sec: 'A' },
+                { name: 'Sheet2', defaultBranch: 'CSD', sec: 'A' },
+                { name: 'Sheet3', defaultBranch: 'CIC', sec: 'A' },
+              ],
+            },
+          ]
+        : [
+            {
+              file: 'III_SEM (CIC).xlsx',
+              branch: 'CIC',
+              sem: 3,
+              year: 2025,
+              sheets: [{ name: 'CIC', sec: 'A' }],
+            },
+            {
+              file: 'III_SEM_CSE(AIML).xlsx',
+              branch: 'CSM',
+              sem: 3,
+              year: 2025,
+              sheets: [
+                { name: 'CSE(AIML)_A', sec: 'A' },
+                { name: 'CSE(AIML)_B', sec: 'B' },
+              ],
+            },
+            {
+              file: 'III_SEM_CSE(DS).xlsx',
+              branch: 'CSD',
+              sem: 3,
+              year: 2025,
+              sheets: [{ name: 'III_CSD', sec: 'A' }],
+            },
+          ]),
 
       // Semester 5 (Batch 2024 + Lateral Entries)
       {
@@ -251,7 +269,8 @@ async function main() {
     for (const sc of studentConfigs) {
       const filePath = path.join(DATA_DIR, sc.file);
       if (!fs.existsSync(filePath)) {
-        throw new Error(`Student file not found: ${filePath}`);
+        console.warn(`Student file not found: ${filePath}, skipping...`);
+        continue;
       }
 
       const wb = XLSX.readFile(filePath);
@@ -272,14 +291,30 @@ async function main() {
 
           for (let c = 0; c < r.length; c++) {
             const val = String(r[c] || '').trim().toUpperCase();
-            // Match 10-char roll numbers: e.g., 25331A4701, 24335A4201, 25331A42D0
+            // Match 10-char roll numbers: e.g., 25331A4701, 24335A4201, 26335A4201
             if (/^[0-9]{2}33[15]A[0-9A-Z]{4}$/.test(val)) {
               let name = '';
+              // Search after roll number
               for (let nc = c + 1; nc < r.length; nc++) {
-                if (typeof r[nc] === 'string' && r[nc].trim().length > 1) {
+                if (typeof r[nc] === 'string' && r[nc].trim().length > 1 && !/^[0-9]{2}33[15]A/.test(r[nc])) {
                   name = r[nc].trim().replace(/\s+/g, ' ');
                   break;
                 }
+              }
+              // Search before roll number (e.g. in IIISem.xlsx format)
+              if (!name && c > 0 && typeof r[c - 1] === 'string' && r[c - 1].trim().length > 1) {
+                name = r[c - 1].trim().replace(/\s+/g, ' ');
+              }
+
+              // Extract row branch / section if specified in columns
+              let rowBranch = sheetDef.defaultBranch || sc.branch;
+              let rowSec = sheetDef.sec || 'A';
+
+              if (r.length > 3 && typeof r[3] === 'string' && ['CSM', 'CSD', 'CIC', 'AIML', 'DS'].includes(r[3].trim().toUpperCase())) {
+                rowBranch = r[3].trim().toUpperCase();
+              }
+              if (r.length > 5 && typeof r[5] === 'string' && ['A', 'B', 'C'].includes(r[5].trim().toUpperCase())) {
+                rowSec = r[5].trim().toUpperCase();
               }
 
               if (name && !rollSet.has(val)) {
@@ -289,10 +324,10 @@ async function main() {
                   rollNumber: val,
                   name,
                   email: `${val.toLowerCase()}@mvgrce.edu.in`,
-                  branch: sc.branch,
+                  branch: rowBranch,
                   semester: sc.sem,
                   year: sc.year,
-                  section: sheetDef.sec,
+                  section: rowSec,
                 });
               }
               break;
@@ -300,7 +335,7 @@ async function main() {
           }
         }
 
-        console.log(`  ✓ Parsed ${sheetCount} students from ${sc.file} [${sheetDef.name}] (Sem ${sc.sem} ${sc.branch} Sec ${sheetDef.sec})`);
+        console.log(`  ✓ Parsed ${sheetCount} students from ${sc.file} [${sheetDef.name}]`);
       }
     }
 

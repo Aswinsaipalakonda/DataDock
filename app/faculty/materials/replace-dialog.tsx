@@ -33,7 +33,7 @@ export default function ReplaceDialog({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      const maxFileSize = 100 * 1024 * 1024; // 100MB
+      const maxFileSize = 150 * 1024 * 1024; // 150MB
       const ext = "." + selectedFile.name.split(".").pop()?.toLowerCase();
 
       if (!ALLOWED_EXTENSIONS.includes(ext)) {
@@ -41,7 +41,7 @@ export default function ReplaceDialog({
         return;
       }
       if (selectedFile.size > maxFileSize) {
-        setError("File exceeds 100MB limit.");
+        setError("File exceeds 150MB limit.");
         return;
       }
       setFile(selectedFile);
@@ -74,7 +74,12 @@ export default function ReplaceDialog({
         window.location.reload();
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+      const rawMsg = err instanceof Error ? err.message : "";
+      if (rawMsg.includes("441") || rawMsg.includes("Minified React error")) {
+        setError("Failed to upload file to the server. The file may exceed the 150MB server upload limit or the connection timed out.");
+      } else {
+        setError(rawMsg || "An unexpected error occurred while replacing the file.");
+      }
     } finally {
       setLoading(false);
     }

@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "server": "node server/index.js",
-    "dev:all": "concurrently -k -n \"API,WEB\" -c \"cyan,magenta\" \"node server/index.js\" \"next dev\"",
+    "dev:all": "concurrently -k -n \"API,WEB\" -c \"cyan,magenta\" \"node server/index.js\" \"next dev --webpack\"",
     "db:init": "node server/database/init-db.js",
     "db:import": "node server/database/import-curriculum-and-students.js",
-    "build": "next build",
+    "db:sync-students": "node server/database/sync-students.js",
+    "build": "next build --webpack",
     "start": "next start",
     "package:deploy": "node scripts/package-deploy.js",
     "lint": "eslint"
