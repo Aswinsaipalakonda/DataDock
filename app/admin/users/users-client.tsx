@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { 
   createUserAction, 
   updateUserAction, 
@@ -37,7 +37,11 @@ import {
   Layers,
   Sparkles,
   Copy,
-  UserMinus
+  UserMinus,
+  Download,
+  UploadCloud,
+  FileSpreadsheet,
+  FileText
 } from "lucide-react";
 
 export interface BranchOption {
@@ -151,9 +155,12 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
   const [isCsvVisible, setIsCsvVisible] = useState(false);
   const [csvImportType, setCsvImportType] = useState<"faculty" | "student">("faculty");
   const [csvRawText, setCsvRawText] = useState("");
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
+  const [isDraggingCsv, setIsDraggingCsv] = useState(false);
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[]>([]);
   const [csvLoading, setCsvLoading] = useState(false);
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Batch Semester Promotion Modal State
   const [isPromoteModalMounted, setIsPromoteModalMounted] = useState(false);
@@ -738,10 +745,53 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
     }
   };
 
+  // Download standard CSV template with headings only (no dummy data)
+  const handleDownloadTemplate = () => {
+    let headers = "";
+    let filename = "";
+    if (csvImportType === "faculty") {
+      headers = "Name,Email,Designation,Phone,Department\n";
+      filename = "faculty_directory_template.csv";
+    } else {
+      headers = "Name,RollNumber,Branch,Semester,Section\n";
+      filename = "student_cohort_template.csv";
+    }
+    const blob = new Blob([headers], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    addToast("info", "Template Downloaded", `Downloaded ${filename} with standard column headers.`);
+  };
+
+  // Handle CSV file selection or drop
+  const handleFileUpload = (file: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv") && !file.name.toLowerCase().endsWith(".txt")) {
+      addToast("error", "Invalid File Format", "Please upload a valid .csv file.");
+      return;
+    }
+    setCsvFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = (e.target?.result as string) || "";
+      handleCsvTextChange(content);
+      addToast("success", "File Loaded", `Loaded and parsed ${file.name}`);
+    };
+    reader.readAsText(file);
+  };
+
   const openCsvModal = () => {
     setCsvRawText("");
+    setCsvFileName(null);
+    setIsDraggingCsv(false);
     setCsvPreview([]);
     setCsvErrors([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setIsCsvMounted(true);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -755,7 +805,11 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
     setTimeout(() => {
       setIsCsvMounted(false);
       setCsvRawText("");
+      setCsvFileName(null);
+      setIsDraggingCsv(false);
       setCsvPreview([]);
+      setCsvErrors([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }, 300);
   };
 
@@ -2416,46 +2470,132 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                 </button>
               </div>
 
-              {/* Sample Template Helper */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-700">
-                    {csvImportType === "faculty" ? "Expected Faculty CSV Headers:" : "Expected Student CSV Headers:"}
-                  </span>
+              {/* Standard Header & Template Download Section */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 to-blue-50/40 border border-slate-200 text-xs text-slate-800 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span className="font-semibold text-slate-900">
+                      {csvImportType === "faculty" ? "Required Faculty CSV Headings:" : "Required Student CSV Headings:"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold text-xs shadow-2xs transition-all cursor-pointer"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>Download CSV Template</span>
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-2 bg-white/90 p-2.5 rounded-xl border border-slate-200">
+                  <code className="font-mono text-[11px] text-slate-800 break-all select-all font-medium">
+                    {csvImportType === "faculty"
+                      ? "Name,Email,Designation,Phone,Department"
+                      : "Name,RollNumber,Branch,Semester,Section"}
+                  </code>
                   <button
                     type="button"
                     onClick={() => {
-                      const sample =
-                        csvImportType === "faculty"
-                          ? "Name,Email,Designation,Phone\nFaculty Member Name,faculty.email@mvgrce.edu.in,Assistant Professor,9876543210"
-                          : "Name,RollNumber,Branch,Semester,Section\nStudent Name,23331A4201,CSM,1,A";
-                      handleCsvTextChange(sample);
+                      const headingOnly = csvImportType === "faculty"
+                        ? "Name,Email,Designation,Phone,Department\n"
+                        : "Name,RollNumber,Branch,Semester,Section\n";
+                      handleCsvTextChange(headingOnly);
                     }}
-                    className="text-[11px] font-semibold text-blue-600 hover:underline"
+                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 shrink-0 cursor-pointer"
                   >
-                    Paste Sample Template
+                    Paste Headings
                   </button>
                 </div>
-                <code className="block p-2 rounded-xl bg-white border border-slate-200 font-mono text-[11px] text-slate-800 break-all">
-                  {csvImportType === "faculty"
-                    ? "Name,Email,Designation,Phone"
-                    : "Name,RollNumber,Branch,Semester,Section"}
-                </code>
               </div>
 
-              {/* Raw CSV Textarea */}
+              {/* Drag and Drop CSV Upload Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDraggingCsv(true);
+                }}
+                onDragLeave={() => setIsDraggingCsv(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDraggingCsv(false);
+                  if (e.dataTransfer.files?.[0]) {
+                    handleFileUpload(e.dataTransfer.files[0]);
+                  }
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`relative p-5 rounded-2xl border-2 border-dashed transition-all cursor-pointer text-center flex flex-col items-center justify-center gap-2 ${
+                  isDraggingCsv
+                    ? "border-blue-500 bg-blue-50/50"
+                    : csvFileName
+                    ? "border-emerald-400 bg-emerald-50/20"
+                    : "border-slate-200 hover:border-slate-300 bg-slate-50/50 hover:bg-slate-50"
+                }`}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".csv,.txt"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      handleFileUpload(e.target.files[0]);
+                    }
+                  }}
+                />
+                <div className="p-3 rounded-full bg-white shadow-2xs border border-slate-100 text-slate-600">
+                  <UploadCloud className="h-6 w-6 text-slate-700" />
+                </div>
+                {csvFileName ? (
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-slate-900 flex items-center justify-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>{csvFileName}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Click or drag a new file to replace
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-slate-800">
+                      Click to upload or drag & drop CSV file
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Supports .csv formatted roster files
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Or Paste Raw CSV Textarea */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Paste Raw CSV Data
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Or Paste Raw CSV Data
+                  </label>
+                  {csvRawText && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleCsvTextChange("");
+                        setCsvFileName(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-rose-600 font-medium cursor-pointer"
+                    >
+                      Clear Data
+                    </button>
+                  )}
+                </div>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={csvRawText}
                   onChange={(e) => handleCsvTextChange(e.target.value)}
                   placeholder={
                     csvImportType === "faculty"
-                      ? "Paste comma-separated CSV rows:\nName, Email, Designation, Phone"
-                      : "Paste comma-separated CSV rows:\nName, RollNumber, Branch, Semester, Section"
+                      ? "Name,Email,Designation,Phone,Department\n..."
+                      : "Name,RollNumber,Branch,Semester,Section\n..."
                   }
                   className="w-full p-3.5 rounded-2xl bg-white border border-slate-200 font-mono text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all"
                 />
