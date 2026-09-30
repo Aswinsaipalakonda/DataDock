@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       ON DUPLICATE KEY UPDATE name = VALUES(name), active = 1
     `);
 
-    // 3. Upsert R24 Subjects
+    // 3. Upsert Decomposed R24 Subjects
     let totalSubjectsUpserted = 0;
     for (const sub of r24Subjects) {
       await pool.query(
@@ -54,6 +54,54 @@ export async function POST(req: NextRequest) {
       );
       totalSubjectsUpserted++;
     }
+
+    // 4. Upsert Decomposed R23 Honors Subjects
+    const r23HonorsSubjects = [
+      { code: 'R23MSCSHT09', title: 'HON-1: Information Security and Forensics', branch: 'CIC', semester: 6, regulation: 'R23' },
+      { code: 'R23MSCSHT10', title: 'HON-1: Routing and Switching Applications', branch: 'CIC', semester: 6, regulation: 'R23' },
+      { code: 'R23MSCSHT11', title: 'HON-2: Penetration Testing', branch: 'CIC', semester: 6, regulation: 'R23' },
+      { code: 'R23MSCSHT12', title: 'HON-2: Network Security, Firewalls and VPNs', branch: 'CIC', semester: 6, regulation: 'R23' },
+      { code: 'R23MSCSHT13', title: 'HON-3: Information Security Governance and Compliance Standards', branch: 'CIC', semester: 7, regulation: 'R23' },
+      { code: 'R23MSCSHT14', title: 'HON-3: Protocol Stacks', branch: 'CIC', semester: 7, regulation: 'R23' },
+    ];
+
+    for (const sub of r23HonorsSubjects) {
+      await pool.query(
+        `INSERT INTO subjects (code, title, branch, semester, regulation, active)
+         VALUES (?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE title = VALUES(title), semester = VALUES(semester), active = 1`,
+        [sub.code, sub.title, sub.branch, sub.semester, sub.regulation]
+      );
+      totalSubjectsUpserted++;
+    }
+
+    // 5. Safe Material & Allocation Migration (Zero Data Loss)
+    const legacyMappings = [
+      { oldCodeLike: '%R24MBMCL001%', newPrimaryCode: 'R24MBMCL001' },
+      { oldCodeLike: '%R24MBMCT001%', newPrimaryCode: 'R24MBMCT001' },
+      { oldCodeLike: '%R24MBMCT002%', newPrimaryCode: 'R24MBMCT002' },
+      { oldCodeLike: '%R24MBMCL003%R24MIACL003%', newPrimaryCode: 'R24MBMCL003' },
+      { oldCodeLike: '%R24MBMCT005%R24MIACT005%', newPrimaryCode: 'R24MBMCT005' },
+      { oldCodeLike: '%R23MSCSHT09%', newPrimaryCode: 'R23MSCSHT09' },
+      { oldCodeLike: '%R23MSCSHT11%', newPrimaryCode: 'R23MSCSHT11' },
+      { oldCodeLike: '%R23MSCSHT13%', newPrimaryCode: 'R23MSCSHT13' },
+    ];
+
+    for (const map of legacyMappings) {
+      await pool.query(
+        'UPDATE materials SET subject = ? WHERE subject LIKE ?',
+        [map.newPrimaryCode, map.oldCodeLike]
+      );
+      try {
+        await pool.query(
+          'UPDATE faculty_subject_allocations SET subject_code = ? WHERE subject_code LIKE ?',
+          [map.newPrimaryCode, map.oldCodeLike]
+        );
+      } catch (e) {}
+    }
+
+    // 6. Safely remove obsolete slash subjects
+    await pool.query("DELETE FROM subjects WHERE code LIKE '%/%'");
 
     // 4. Upsert Student Rosters
     const BATCH_SIZE = 50;
