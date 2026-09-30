@@ -4,11 +4,13 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { Readable } from "stream";
+import busboy from "busboy";
 import pool from "@/lib/db";
 import { ALLOWED_EXTENSIONS } from "@/lib/file-constants";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const JWT_SECRET = process.env.JWT_SECRET || "de-elearn-mvgrce-super-secure-jwt-secret-key-2026";
 const uploadBaseDir = path.join(process.cwd(), "server", "uploads", "materials");
@@ -36,9 +38,116 @@ function normalizeMaterialType(rawType: string): string {
   return "Other Resources";
 }
 
+interface ParsedMultipart {
+  fields: Record<string, string | string[]>;
+  files: Array<{
+    filename: string;
+    mimeType: string;
+    buffer: Buffer;
+    size: number;
+    ext: string;
+  }>;
+}
+
+// Custom stream parser using Busboy to handle multi-megabyte payloads without hitting undici buffer limits
+async function parseMultipartStream(req: NextRequest): Promise<ParsedMultipart> {
+  const contentType = req.headers.get("content-type") || "";
+  if (!contentType.includes("multipart/form-data")) {
+    throw new Error("Invalid Content-Type header. Expected multipart/form-data.");
+  }
+
+  const arrayBuffer = await req.arrayBuffer();
+  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+    throw new Error("Request body is empty.");
+  }
+
+  const buffer = Buffer.from(arrayBuffer);
+  console.log("[parseMultipartStream] Content-Type:", contentType, "Buffer size:", buffer.length);
+
+  return new Promise((resolve, reject) => {
+    const bb = busboy({
+      headers: { "content-type": contentType },
+      limits: {
+        fileSize: 150 * 1024 * 1024, // 150 MB per file
+        files: 10,
+      },
+    });
+
+    const fields: Record<string, string | string[]> = {};
+    const files: Array<{
+      filename: string;
+      mimeType: string;
+      buffer: Buffer;
+      size: number;
+      ext: string;
+    }> = [];
+
+    bb.on("field", (name: string, val: string) => {
+      if (fields[name]) {
+        if (Array.isArray(fields[name])) {
+          (fields[name] as string[]).push(val);
+        } else {
+          fields[name] = [fields[name] as string, val];
+        }
+      } else {
+        fields[name] = val;
+      }
+    });
+
+    bb.on("file", (name: string, fileStream: NodeJS.ReadableStream, info: busboy.FileInfo) => {
+      const { filename, mimeType } = info;
+      const chunks: Buffer[] = [];
+      let totalSize = 0;
+      let limitExceeded = false;
+
+      fileStream.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+        totalSize += chunk.length;
+      });
+
+      fileStream.on("limit", () => {
+        limitExceeded = true;
+      });
+
+      fileStream.on("end", () => {
+        if (limitExceeded) {
+          return reject(
+            new Error(`File "${filename}" exceeds the maximum allowable upload limit of 150 MB.`)
+          );
+        }
+        if (filename && totalSize > 0) {
+          const ext = "." + (filename.split(".").pop()?.toLowerCase() || "");
+          files.push({
+            filename,
+            mimeType: mimeType || "application/octet-stream",
+            buffer: Buffer.concat(chunks),
+            size: totalSize,
+            ext,
+          });
+        }
+      });
+
+      fileStream.on("error", (err: any) => {
+        reject(err);
+      });
+    });
+
+    bb.on("error", (err: any) => {
+      reject(err);
+    });
+
+    bb.on("close", () => {
+      resolve({ fields, files });
+    });
+
+    bb.write(buffer);
+    bb.end();
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // 1. Authenticate user from session cookies or auth header
+    // 1. Authenticate user from session cookies or authorization header
     const cookieStore = await cookies();
     const token =
       cookieStore.get("de_token")?.value ||
@@ -47,14 +156,20 @@ export async function POST(req: NextRequest) {
       req.headers.get("authorization")?.replace("Bearer ", "");
 
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized. Please log in to upload materials." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized. Please log in to upload materials." },
+        { status: 401 }
+      );
     }
 
     let userPayload: any = null;
     try {
       userPayload = jwt.verify(token, JWT_SECRET);
     } catch {
-      return NextResponse.json({ error: "Session expired or invalid. Please log in again." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Session expired or invalid. Please log in again." },
+        { status: 401 }
+      );
     }
 
     if (!userPayload?.id) {
@@ -68,26 +183,47 @@ export async function POST(req: NextRequest) {
     );
 
     if (!userRows.length || userRows[0].status === "deactivated") {
-      return NextResponse.json({ error: "Account not found or deactivated." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Account not found or deactivated." },
+        { status: 403 }
+      );
     }
 
     const currentUser = userRows[0];
     if (currentUser.role !== "faculty" && currentUser.role !== "admin") {
-      return NextResponse.json({ error: "Only faculty and administrators can publish materials." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Only faculty and administrators can publish materials." },
+        { status: 403 }
+      );
     }
 
-    // 2. Parse Multipart Form Data
-    const formData = await req.formData();
+    // 2. Parse Multipart Stream via Busboy (handles 12MB+ files smoothly)
+    let parsed: ParsedMultipart;
+    try {
+      parsed = await parseMultipartStream(req);
+    } catch (parseErr: any) {
+      console.error("Multipart stream parse error:", parseErr);
+      return NextResponse.json(
+        { error: parseErr?.message || "Failed to parse incoming upload payload." },
+        { status: 400 }
+      );
+    }
 
-    const title = (formData.get("title") as string)?.trim();
-    const description = (formData.get("description") as string)?.trim() || "";
-    const subject = (formData.get("subject") as string)?.trim();
-    const subjectTitle = (formData.get("subjectTitle") as string)?.trim() || `${subject} Course`;
-    const regulation = (formData.get("regulation") as string)?.trim() || "R23";
-    const semester = parseInt(formData.get("semester") as string, 10) || 3;
-    const rawType = (formData.get("type") as string)?.trim();
-    const state = (formData.get("state") as "draft" | "published") || "published";
-    const tagsStr = (formData.get("tags") as string) || "";
+    const getFieldString = (key: string): string => {
+      const val = parsed.fields[key];
+      if (Array.isArray(val)) return val[0] || "";
+      return val || "";
+    };
+
+    const title = getFieldString("title").trim();
+    const description = getFieldString("description").trim() || "";
+    const subject = getFieldString("subject").trim();
+    const subjectTitle = getFieldString("subjectTitle").trim() || `${subject} Course`;
+    const regulation = getFieldString("regulation").trim() || "R24";
+    const semester = parseInt(getFieldString("semester"), 10) || 3;
+    const rawType = getFieldString("type").trim();
+    const state = (getFieldString("state") as "draft" | "published") || "published";
+    const tagsStr = getFieldString("tags");
     const tags = tagsStr
       ? tagsStr.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
@@ -101,8 +237,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse allocations
-    const allocationsRaw = formData.get("allocations") as string;
+    // Parse target allocations
+    const allocationsRaw = getFieldString("allocations");
     let targetAllocations: Array<{ branch: string; section: string }> = [];
 
     if (allocationsRaw) {
@@ -114,9 +250,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (!targetAllocations.length) {
-      const rawBranches = formData.getAll("branches") as string[];
-      const singleBranch = (formData.get("branch") as string)?.trim();
-      const rawSection = (formData.get("section") as string)?.trim() || "ALL";
+      const rawBranchesVal = parsed.fields["branches"];
+      const rawBranches = Array.isArray(rawBranchesVal)
+        ? rawBranchesVal
+        : rawBranchesVal
+        ? [rawBranchesVal]
+        : [];
+      const singleBranch = getFieldString("branch").trim();
+      const rawSection = getFieldString("section").trim() || "ALL";
       const targetBranches = rawBranches.length > 0 ? rawBranches : [singleBranch || "CIC"];
       targetAllocations = targetBranches.map((b) => ({ branch: b, section: rawSection }));
     }
@@ -128,10 +269,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse files
-    const files = formData.getAll("files") as File[];
-    const validFiles = files.filter((f) => f && f.size > 0 && f.name !== "undefined");
-
+    // Validate files
+    const validFiles = parsed.files;
     if (validFiles.length === 0) {
       return NextResponse.json(
         { error: "At least one valid file is required to upload a material." },
@@ -139,49 +278,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const maxFileSize = 150 * 1024 * 1024; // 150 MB
-
     for (const file of validFiles) {
-      const ext = "." + (file.name.split(".").pop()?.toLowerCase() || "");
-      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      if (!ALLOWED_EXTENSIONS.includes(file.ext)) {
         return NextResponse.json(
           {
-            error: `File type "${ext}" is not supported. Supported types include PDF, PPT, Word, Excel, Code files, ZIP, TXT, and Images.`,
+            error: `File type "${file.ext}" is not supported. Supported types: PDF, PPT, Word, Excel, Code files, ZIP, TXT, and Images.`,
           },
           { status: 400 }
         );
       }
-      if (file.size > maxFileSize) {
-        return NextResponse.json(
-          { error: `File "${file.name}" exceeds the maximum limit of 150 MB.` },
-          { status: 400 }
-        );
-      }
     }
 
-    // Read buffers into memory for disk write
-    const fileBuffers: Array<{
-      name: string;
-      size: number;
-      type: string;
-      ext: string;
-      buffer: Buffer;
-    }> = [];
-
-    for (const file of validFiles) {
-      const ext = "." + (file.name.split(".").pop()?.toLowerCase() || "");
-      const arrayBuf = await file.arrayBuffer();
-      const buf = Buffer.from(arrayBuf);
-      fileBuffers.push({
-        name: file.name,
-        size: file.size,
-        type: file.type || "application/octet-stream",
-        ext,
-        buffer: buf,
-      });
-    }
-
-    // 3. Insert records and persist files for each allocation target
+    // 3. Atomically persist to disk and database for each allocation target
     const createdMaterialIds: string[] = [];
 
     for (const alloc of targetAllocations) {
@@ -189,7 +297,7 @@ export async function POST(req: NextRequest) {
       const section = alloc.section || "ALL";
       const materialId = crypto.randomUUID();
 
-      // Ensure branch, semester, regulation exist in lookup tables
+      // Ensure branch, semester, regulation, and subject exist in lookup tables
       await pool.query(
         "INSERT IGNORE INTO branches (code, name, active) VALUES (?, ?, 1)",
         [branch, branch]
@@ -233,7 +341,7 @@ export async function POST(req: NextRequest) {
         fs.mkdirSync(materialDir, { recursive: true });
       }
 
-      for (const item of fileBuffers) {
+      for (const item of validFiles) {
         const fileId = crypto.randomUUID();
         const diskFileName = `${fileId}${item.ext}`;
         const storageRef = `${materialId}/${diskFileName}`;
@@ -247,8 +355,8 @@ export async function POST(req: NextRequest) {
           [
             fileId,
             materialId,
-            item.name,
-            item.type,
+            item.filename,
+            item.mimeType,
             item.size,
             storageRef,
             storageRef,
