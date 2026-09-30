@@ -13,7 +13,11 @@ import AttachFileDialog from "./attach-file-dialog";
 import DeleteFileDialog from "./delete-file-dialog";
 import DeleteUnitDialog from "./delete-unit-dialog";
 import FilePreviewModal from "@/components/file-preview-modal";
-import MaterialShareModal from "@/components/material-share-modal";
+import { 
+  MaterialShareMetadata, 
+  getWhatsAppShareUrl, 
+  copyWhatsAppMessageToClipboard 
+} from "@/lib/share-utils";
 import { StudentEngagementLog } from "./page";
 import StudentCohortProgressMatrix, { RegisteredStudent } from "@/components/student-cohort-progress-matrix";
 import { 
@@ -250,15 +254,36 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
   } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [downloadingRef, setDownloadingRef] = useState<string | null>(null);
+  const [sharingMaterialId, setSharingMaterialId] = useState<string | null>(null);
 
-  // Sharing Dialog State
-  const [shareTarget, setShareTarget] = useState<{
-    materialId: string;
-    title: string;
-    subject?: string;
-    branch?: string;
-    semester?: number;
-  } | null>(null);
+  const handleDirectWhatsAppShare = async (m: MaterialItem) => {
+    setSharingMaterialId(m.id);
+    const activeSub = subjects.find((s) => s.code === m.subject);
+    const meta: MaterialShareMetadata = {
+      materialId: m.id,
+      title: m.title,
+      subject: m.subject,
+      subjectTitle: activeSub?.title || m.subject,
+      branch: m.branches && m.branches.length > 0 ? m.branches.join(", ") : (m.branch || "All Branches"),
+      semester: m.semester || 3,
+      type: m.type,
+    };
+
+    try {
+      await copyWhatsAppMessageToClipboard(meta);
+    } catch {
+      // ignore clipboard error if unfocused
+    }
+
+    const url = getWhatsAppShareUrl(meta);
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+
+    setTimeout(() => {
+      setSharingMaterialId(null);
+    }, 2000);
+  };
 
   // Cohort Matrix Drawer States
   const [isDrawerMounted, setIsDrawerMounted] = useState(false);
@@ -1517,18 +1542,12 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
 
                         {m.state === "published" && (
                           <button
-                            onClick={() => setShareTarget({
-                              materialId: m.id,
-                              title: m.title,
-                              subject: m.subject,
-                              branch: m.branches && m.branches.length > 0 ? m.branches.join(", ") : (m.branch || "All Branches"),
-                              semester: m.semester || 3,
-                            })}
-                            className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200 flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
-                            title="Share material to WhatsApp / Copy Link"
+                            onClick={() => handleDirectWhatsAppShare(m)}
+                            className="px-3.5 py-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-emerald-800 text-xs font-semibold rounded-full border border-[#25D366]/30 flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                            title="Open WhatsApp directly with student link"
                           >
-                            <Share2 className="h-3.5 w-3.5 text-emerald-600" />
-                            <span>Share</span>
+                            <Share2 className="h-3.5 w-3.5 text-[#25D366]" />
+                            <span>{sharingMaterialId === m.id ? "Opening WhatsApp..." : "Share to WhatsApp"}</span>
                           </button>
                         )}
 
@@ -1922,14 +1941,6 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
             </div>
           </div>
         </div>
-      )}
-      {/* Post-Upload & On-Demand WhatsApp / Link Share Modal */}
-      {shareTarget && (
-        <MaterialShareModal
-          isOpen={!!shareTarget}
-          onClose={() => setShareTarget(null)}
-          material={shareTarget}
-        />
       )}
     </div>
   );

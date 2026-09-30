@@ -30,7 +30,7 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import FilePreviewModal from "@/components/file-preview-modal";
-import { MaterialShareModal } from "@/components/material-share-modal";
+import { MaterialCelebrationView } from "@/components/material-celebration-view";
 import { MaterialShareMetadata } from "@/lib/share-utils";
 import { formatSubjectTitle } from "@/lib/utils";
 
@@ -240,7 +240,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
   const [tagsStr, setTagsStr] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [state, setState] = useState<"draft" | "published">("published");
-  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [isUploadSuccess, setIsUploadSuccess] = useState(false);
   const [shareData, setShareData] = useState<MaterialShareMetadata | null>(null);
 
   // All subjects filtered by active regulation
@@ -625,7 +625,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
           regulation: selectedRegulation,
           type: type,
         });
-        setShareModalOpen(true);
+        setIsUploadSuccess(true);
         setLoading(false);
         setUploadProgress(null);
         return;
@@ -659,7 +659,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
           regulation: selectedRegulation,
           type: type,
         });
-        setShareModalOpen(true);
+        setIsUploadSuccess(true);
         setLoading(false);
         setUploadProgress(null);
       }
@@ -682,7 +682,34 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
     return kb.toFixed(1) + " KB";
   };
 
+  const handleResetForm = () => {
+    setIsUploadSuccess(false);
+    setShareData(null);
+    setStep(1);
+    setTitle("");
+    setDescription("");
+    setType("Notes");
+    setTagsStr("");
+    setFiles([]);
+    setError(null);
+    setUploadProgress(null);
+  };
+
   const selectedTypeLabel = MATERIAL_TYPES.find(t => t.value === type)?.label || type;
+
+  if (isUploadSuccess && shareData) {
+    return (
+      <MaterialCelebrationView
+        material={shareData}
+        files={files.map(f => ({ name: f.name, size: f.size }))}
+        onUploadAnother={handleResetForm}
+        onNavigateToMaterials={() => {
+          router.push("/faculty/materials");
+          router.refresh();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="w-full max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200/90 shadow-[0_2px_16px_rgba(0,0,0,0.04)] p-6 sm:p-8 space-y-6 sm:space-y-8" suppressHydrationWarning>
@@ -1577,22 +1604,6 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
           onDownload={handleDownloadLocalFile}
         />
       )}
-
-      {/* Interactive Multi-Platform & WhatsApp Share Modal */}
-      <MaterialShareModal
-        isOpen={shareModalOpen}
-        onClose={() => {
-          setShareModalOpen(false);
-          router.push("/faculty/materials");
-          router.refresh();
-        }}
-        material={shareData}
-        onNavigateToMaterials={() => {
-          setShareModalOpen(false);
-          router.push("/faculty/materials");
-          router.refresh();
-        }}
-      />
     </div>
   );
 }
