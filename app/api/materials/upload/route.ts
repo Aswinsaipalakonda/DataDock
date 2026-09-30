@@ -94,7 +94,7 @@ async function parseMultipartStream(req: NextRequest): Promise<ParsedMultipart> 
       }
     });
 
-    bb.on("file", (name: string, fileStream: NodeJS.ReadableStream, info: busboy.FileInfo) => {
+    bb.on("file", (name: string, fileStream: any, info: any) => {
       const { filename, mimeType } = info;
       const chunks: Buffer[] = [];
       let totalSize = 0;

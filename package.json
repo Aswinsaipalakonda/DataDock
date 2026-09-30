@@ -17,6 +17,7 @@
   "dependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
+    "@types/busboy": "^1.5.4",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
@@ -26,6 +27,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "bcryptjs": "^3.0.3",
+    "busboy": "^1.6.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -43,7 +45,6 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@types/busboy": "^1.5.4",
     "concurrently": "^10.0.5",
     "eslint": "^9",
     "eslint-config-next": "^16.3.6"
