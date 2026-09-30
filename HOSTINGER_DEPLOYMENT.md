@@ -128,3 +128,23 @@ On Linux/Hostinger servers, the build user needs read and execute permissions ac
   1. Ensure no empty folders exist under `/app/api/` (stale/empty directories have been cleaned up).
   2. Run `chmod -R 755 app/` and `chmod -R 644 app/**/*` in your project root on the server.
   3. Re-trigger the build via Hostinger hPanel or run `npm run build`.
+
+### Error: `Failed to complete upload on the server / Payload Too Large (413)`
+- **Cause**: Hostinger Apache or Nginx proxy limits max upload body size (defaults to 2MB).
+- **Fix**:
+  1. In `public_html/.htaccess`, add the directive:
+     ```apache
+     LimitRequestBody 157286400
+     ```
+  2. Ensure directory permissions on the uploads folder:
+     ```bash
+     mkdir -p server/uploads/materials
+     chmod -R 775 server/uploads
+     ```
+
+### Database Migration: Split Combined Subjects
+If updating an existing production database with previously merged subjects:
+```bash
+node server/database/split-combined-subjects.js
+```
+This safely splits multi-code subjects and preserves all existing materials without data loss.

@@ -636,19 +636,36 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
           branch: rowBranch,
         });
       } else {
-        const rowName = row["name"] || row["studentname"] || cols[0] || "";
-        const rowRoll = (row["rollnumber"] || row["rollno"] || row["roll"] || cols[1] || "").toUpperCase().trim();
-        let rowBranch = (row["branch"] || cols[2] || "CSM").trim().toUpperCase();
+        // Support RollNumber,Name,Branch,Semester,Section as primary format
+        let rowRoll = (row["rollnumber"] || row["rollno"] || row["roll"] || row["roll_number"] || "").toUpperCase().trim();
+        let rowName = row["name"] || row["studentname"] || row["student_name"] || "";
+
+        // If headers weren't explicitly named, determine by position and roll number format
+        if (!rowRoll && !rowName) {
+          if (isValidRollNumber(cols[0])) {
+            rowRoll = (cols[0] || "").toUpperCase().trim();
+            rowName = cols[1] || "";
+          } else {
+            rowName = cols[0] || "";
+            rowRoll = (cols[1] || "").toUpperCase().trim();
+          }
+        } else if (!rowRoll) {
+          rowRoll = (isValidRollNumber(cols[0]) ? cols[0] : cols[1] || "").toUpperCase().trim();
+        } else if (!rowName) {
+          rowName = (isValidRollNumber(cols[0]) ? cols[1] : cols[0]) || "";
+        }
+
+        let rowBranch = (row["branch"] || row["dept"] || row["department"] || cols[2] || "CSM").trim().toUpperCase();
         if (rowBranch === "ICB") rowBranch = "CIC";
 
-        const semRaw = (row["semester"] || row["sem"] || cols[3] || "1").toString().trim().toUpperCase();
+        const semRaw = (row["semester"] || row["sem"] || cols[3] || "3").toString().trim().toUpperCase();
         const romanMap: Record<string, string> = { I: "1", II: "2", III: "3", IV: "4", V: "5", VI: "6", VII: "7", VIII: "8" };
         const rowSem = romanMap[semRaw] || semRaw;
         const rowSec = (row["section"] || row["sec"] || cols[4] || "A").trim().toUpperCase();
 
-        if (!rowName) errors.push(`Row ${i}: Missing Student Name`);
         if (!rowRoll) errors.push(`Row ${i}: Missing Roll Number`);
         else if (!isValidRollNumber(rowRoll)) errors.push(`Row ${i}: Invalid 10-char roll number (${rowRoll})`);
+        if (!rowName) errors.push(`Row ${i}: Missing Student Name`);
 
         previewList.push({
           name: rowName,
@@ -753,7 +770,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
       headers = "Name,Email,Designation,Phone,Department\n";
       filename = "faculty_directory_template.csv";
     } else {
-      headers = "Name,RollNumber,Branch,Semester,Section\n";
+      headers = "RollNumber,Name,Branch,Semester,Section\n";
       filename = "student_cohort_template.csv";
     }
     const blob = new Blob([headers], { type: "text/csv;charset=utf-8;" });
@@ -2492,14 +2509,14 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                   <code className="font-mono text-[11px] text-slate-800 break-all select-all font-medium">
                     {csvImportType === "faculty"
                       ? "Name,Email,Designation,Phone,Department"
-                      : "Name,RollNumber,Branch,Semester,Section"}
+                      : "RollNumber,Name,Branch,Semester,Section"}
                   </code>
                   <button
                     type="button"
                     onClick={() => {
                       const headingOnly = csvImportType === "faculty"
                         ? "Name,Email,Designation,Phone,Department\n"
-                        : "Name,RollNumber,Branch,Semester,Section\n";
+                        : "RollNumber,Name,Branch,Semester,Section\n";
                       handleCsvTextChange(headingOnly);
                     }}
                     className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 shrink-0 cursor-pointer"
@@ -2595,7 +2612,7 @@ export default function UsersClient({ initialUsers, branches, semesters }: Users
                   placeholder={
                     csvImportType === "faculty"
                       ? "Name,Email,Designation,Phone,Department\n..."
-                      : "Name,RollNumber,Branch,Semester,Section\n..."
+                      : "RollNumber,Name,Branch,Semester,Section\n..."
                   }
                   className="w-full p-3.5 rounded-2xl bg-white border border-slate-200 font-mono text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-all"
                 />

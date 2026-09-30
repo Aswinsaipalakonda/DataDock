@@ -133,6 +133,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -516,40 +517,114 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
   const handleSubmit = async (publishState?: "draft" | "published") => {
     const finalState = publishState || state;
     setLoading(true);
+    setUploadProgress(0);
     setError(null);
 
+    const formData = new FormData();
+    formData.append("title", title);
+    formData.append("description", description);
+    formData.append("subject", selectedSubjectCode);
+    formData.append("subjectTitle", currentSubject?.title || "");
+    formData.append("regulation", selectedRegulation);
+    formData.append("semester", String(selectedSemester || currentSubject?.semester || 1));
+    formData.append("type", type);
+    formData.append("state", finalState);
+    formData.append("tags", tagsStr);
+    
+    // Append target allocations as JSON
+    formData.append("allocations", JSON.stringify(targetAllocations));
+
+    targetBranches.forEach(b => {
+      formData.append("branches", b);
+    });
+
+    files.forEach(file => {
+      formData.append("files", file);
+    });
+
+    // Helper: Direct REST API upload with real-time progress
+    const uploadViaRest = (): Promise<{ success: boolean; error?: string }> => {
+      return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/materials/upload", true);
+        xhr.withCredentials = true;
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
+            setUploadProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          setUploadProgress(100);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              resolve({ success: true, error: res.error });
+            } catch {
+              resolve({ success: true });
+            }
+          } else if (xhr.status === 413) {
+            resolve({
+              success: false,
+              error: "The files exceed the server upload limit (150 MB). Please try with smaller files or fewer files at once.",
+            });
+          } else if (xhr.status === 401 || xhr.status === 403) {
+            resolve({
+              success: false,
+              error: "Your faculty session has expired or is unauthorized. Please refresh and log in again.",
+            });
+          } else {
+            let msg = "Failed to upload material on the server.";
+            try {
+              const res = JSON.parse(xhr.responseText);
+              if (res?.error) msg = res.error;
+            } catch {
+              // fallback
+            }
+            resolve({ success: false, error: msg });
+          }
+        };
+
+        xhr.onerror = () => {
+          resolve({ success: false, error: "NETWORK_ERROR" });
+        };
+
+        xhr.ontimeout = () => {
+          resolve({ success: false, error: "Network timed out during file upload. Please check your internet connection." });
+        };
+
+        xhr.send(formData);
+      });
+    };
+
     try {
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("description", description);
-      formData.append("subject", selectedSubjectCode);
-      formData.append("subjectTitle", currentSubject?.title || "");
-      formData.append("regulation", selectedRegulation);
-      formData.append("semester", String(selectedSemester || currentSubject?.semester || 1));
-      formData.append("type", type);
-      formData.append("state", finalState);
-      formData.append("tags", tagsStr);
-      
-      // Append target allocations as JSON
-      formData.append("allocations", JSON.stringify(targetAllocations));
+      // 1. Attempt high-performance direct REST upload with progress
+      const restResult = await uploadViaRest();
 
-      targetBranches.forEach(b => {
-        formData.append("branches", b);
-      });
-
-      files.forEach(file => {
-        formData.append("files", file);
-      });
-
-      const result = await uploadMaterialAction(formData);
-      if (result?.error) {
-        setError(result.error);
-        setLoading(false);
-      } else if (result?.success) {
-        router.push(result.redirectUrl || "/faculty/materials");
-        router.refresh();
-      } else {
+      if (restResult.success) {
         router.push("/faculty/materials");
+        router.refresh();
+        return;
+      }
+
+      // If REST failed with a specific user error (like 413 or 401), display it directly
+      if (restResult.error && restResult.error !== "NETWORK_ERROR") {
+        setError(restResult.error);
+        setLoading(false);
+        setUploadProgress(null);
+        return;
+      }
+
+      // 2. Fallback to Next.js Server Action if REST endpoint route was bypassed
+      const serverActionResult = await uploadMaterialAction(formData);
+      if (serverActionResult?.error) {
+        setError(serverActionResult.error);
+        setLoading(false);
+        setUploadProgress(null);
+      } else {
+        router.push(serverActionResult?.redirectUrl || "/faculty/materials");
         router.refresh();
       }
     } catch (err: unknown) {
@@ -560,6 +635,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
         setError(rawMsg || "An unexpected error occurred while uploading.");
       }
       setLoading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -1436,7 +1512,11 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Publishing...</span>
+                    <span>
+                      {uploadProgress !== null && uploadProgress < 100
+                        ? `Uploading ${uploadProgress}%...`
+                        : "Saving Material..."}
+                    </span>
                   </>
                 ) : (
                   <>

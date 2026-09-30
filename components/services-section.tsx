@@ -98,7 +98,7 @@ export function Services02Section() {
                 Department Specializations
               </h2>
               <p className="text-slate-600 sm:text-base text-sm font-normal leading-relaxed">
-                Explore the three core degree programs offered under the Department of Data Engineering at MVGR College (A).
+                Explore the three core degree programs offered under the Department of Data Engineering at MVGR College of Engineering (A).
               </p>
             </div>
 

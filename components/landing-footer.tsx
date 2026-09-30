@@ -32,7 +32,7 @@ export function LandingFooter() {
                   </span>
                 </div>
                 <span className="text-xs text-slate-500 font-medium block">
-                  Department of Data Engineering • MVGRCE (A)
+                  Dept. of Data Engineering • MVGR College of Engineering (A)
                 </span>
               </div>
             </Link>

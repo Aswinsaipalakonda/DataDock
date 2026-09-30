@@ -63,31 +63,28 @@ export default function Sidebar({ userRole, userScope, signOutAction }: SidebarP
 
   return (
     <aside
-      className="hidden lg:flex fixed top-0 bottom-0 left-0 z-45 w-64 bg-[#0F172A] border-r border-slate-800 flex-col"
+      className="hidden lg:flex fixed top-0 bottom-0 left-0 z-45 w-72 bg-[#0F172A] border-r border-slate-800 flex-col"
     >
       {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800/80 bg-slate-900/40">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-11 h-11 rounded-2xl bg-white p-1.5 shadow-md shadow-black/30 border border-slate-700/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200">
+      <div className="px-4 py-4 border-b border-slate-800/80 bg-slate-900/40">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="w-9 h-9 rounded-xl bg-white p-1 shadow-md shadow-black/30 border border-slate-700/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200">
             <Image
               src="/De_logo.jpg"
               alt="Department of Data Engineering Logo"
-              width={44}
-              height={44}
+              width={36}
+              height={36}
               priority
-              className="w-full h-full object-contain rounded-xl"
+              className="w-full h-full object-contain rounded-lg"
             />
           </div>
-          <div className="min-w-0">
-            <span className="font-bold text-white text-sm tracking-tight block leading-snug truncate group-hover:text-blue-300 transition-colors">
-              Data Engineering
+          <div className="min-w-0 flex-1 flex flex-col justify-center">
+            <span className="font-bold text-white text-[13px] tracking-tight block leading-tight group-hover:text-blue-300 transition-colors whitespace-nowrap">
+              Dept. of Data Engineering
             </span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-              <span className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase block truncate">
-                MVGR College (A)
-              </span>
-            </div>
+            <span className="text-[10px] text-slate-400 font-medium tracking-normal block leading-tight mt-1 whitespace-nowrap">
+              MVGR College of Engineering (A)
+            </span>
           </div>
         </Link>
       </div>

@@ -219,9 +219,10 @@ async function uploadMaterial(req, res) {
       await pool.query('INSERT IGNORE INTO branches (code, name, active) VALUES (?, ?, 1)', [targetBranch, targetBranch]);
       await pool.query('INSERT IGNORE INTO semesters (number, name, active) VALUES (?, ?, 1)', [parseInt(semester, 10), `${semester}th Semester`]);
       await pool.query('INSERT IGNORE INTO regulations (code, name, active) VALUES (?, ?, 1)', [regulation || 'R23', `${regulation || 'R23'} Autonomous Regulation`]);
+      const subjectTitle = req.body.subjectTitle || `${subject} Course`;
       await pool.query(
         'INSERT IGNORE INTO subjects (code, title, branch, semester, regulation, active) VALUES (?, ?, ?, ?, ?, 1)',
-        [subject, `${subject} Course`, targetBranch, parseInt(semester, 10), regulation || 'R23']
+        [subject, subjectTitle, targetBranch, parseInt(semester, 10), regulation || 'R23']
       );
 
       // Insert material
@@ -248,9 +249,9 @@ async function uploadMaterial(req, res) {
       for (const f of files) {
         const fileId = crypto.randomUUID();
         await pool.query(
-          `INSERT INTO material_files (id, material_id, file_name, mime_type, size, version, storage_path)
-           VALUES (?, ?, ?, ?, ?, 1, ?)`,
-          [fileId, materialId, f.originalname, f.mimetype, f.size, f.filename]
+          `INSERT INTO material_files (id, material_id, file_name, mime_type, size, version, storage_path, storage_ref)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+          [fileId, materialId, f.originalname, f.mimetype, f.size, f.filename, f.filename]
         );
       }
 

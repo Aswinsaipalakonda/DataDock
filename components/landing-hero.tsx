@@ -62,7 +62,7 @@ export function LandingHeader() {
               </span>
             </div>
             <span className="text-[9px] sm:text-[10px] text-slate-500 font-semibold tracking-wider uppercase block truncate">
-              <span className="hidden sm:inline">Data Engineering • </span>MVGR (A)
+              <span className="hidden sm:inline">Dept. of Data Engineering • </span>MVGR College of Engineering (A)
             </span>
           </div>
         </Link>

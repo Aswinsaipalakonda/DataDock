@@ -38,7 +38,7 @@ export default async function AdminLayout({
       />
 
       {/* Main Content Container */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-h-screen pb-24 lg:pb-8">
+      <div className="flex-1 lg:pl-72 flex flex-col min-h-screen pb-24 lg:pb-8">
         {/* Top Header Navigation Bar */}
         <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-8 py-3 flex items-center justify-between gap-3 transition-all">
           <div className="flex items-center gap-3">
@@ -55,8 +55,8 @@ export default async function AdminLayout({
                 />
               </div>
               <div className="leading-tight">
-                <span className="text-xs font-bold text-slate-900 block">Data Engineering</span>
-                <span className="text-[10px] text-slate-500 font-medium block">MVGR College</span>
+                <span className="text-xs font-bold text-slate-900 block">Dept. of Data Engineering</span>
+                <span className="text-[10px] text-slate-500 font-medium block">MVGR College of Engineering (A)</span>
               </div>
             </Link>
 

@@ -193,10 +193,10 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
                   </div>
                   <div className="min-w-0">
                     <span className="font-extrabold text-white text-sm block leading-tight tracking-tight">
-                      Data Engineering
+                      Dept. of Data Engineering
                     </span>
                     <span className="text-[11px] text-slate-400 font-medium block">
-                      MVGR College (A)
+                      MVGR College of Engineering (A)
                     </span>
                   </div>
                 </div>
@@ -292,7 +292,7 @@ export default function AdminMobileNav({ signOutAction, userEmail, userName }: A
                 </form>
                 <div className="text-center">
                   <span className="text-[10px] text-slate-500 font-medium">
-                    DataDock • MVGR College (A)
+                    DataDock • MVGR College of Engineering (A)
                   </span>
                 </div>
               </div>
