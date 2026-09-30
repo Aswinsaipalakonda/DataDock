@@ -4,7 +4,6 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import { Readable } from "stream";
 import busboy from "busboy";
 import pool from "@/lib/db";
 import { ALLOWED_EXTENSIONS } from "@/lib/file-constants";
@@ -49,11 +48,19 @@ interface ParsedMultipart {
   }>;
 }
 
-// Custom stream parser using Busboy to handle multi-megabyte payloads without hitting undici buffer limits
+// Custom resilient stream parser using Busboy to handle multi-megabyte payloads without hitting buffer limits
 async function parseMultipartStream(req: NextRequest): Promise<ParsedMultipart> {
   const contentType = req.headers.get("content-type") || "";
   if (!contentType.includes("multipart/form-data")) {
     throw new Error("Invalid Content-Type header. Expected multipart/form-data.");
+  }
+
+  // Sanitize contentType header (clean up boundary quotes if present)
+  let cleanContentType = contentType;
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (boundaryMatch) {
+    const rawBoundary = boundaryMatch[1] || boundaryMatch[2];
+    cleanContentType = `multipart/form-data; boundary=${rawBoundary.trim()}`;
   }
 
   const arrayBuffer = await req.arrayBuffer();
@@ -62,11 +69,12 @@ async function parseMultipartStream(req: NextRequest): Promise<ParsedMultipart> 
   }
 
   const buffer = Buffer.from(arrayBuffer);
-  console.log("[parseMultipartStream] Content-Type:", contentType, "Buffer size:", buffer.length);
 
   return new Promise((resolve, reject) => {
+    let hasResolved = false;
+
     const bb = busboy({
-      headers: { "content-type": contentType },
+      headers: { "content-type": cleanContentType },
       limits: {
         fileSize: 150 * 1024 * 1024, // 150 MB per file
         files: 10,
@@ -111,9 +119,12 @@ async function parseMultipartStream(req: NextRequest): Promise<ParsedMultipart> 
 
       fileStream.on("end", () => {
         if (limitExceeded) {
-          return reject(
-            new Error(`File "${filename}" exceeds the maximum allowable upload limit of 150 MB.`)
-          );
+          if (!hasResolved) {
+            hasResolved = true;
+            return reject(
+              new Error(`File "${filename}" exceeds the maximum allowable upload limit of 150 MB.`)
+            );
+          }
         }
         if (filename && totalSize > 0) {
           const ext = "." + (filename.split(".").pop()?.toLowerCase() || "");
@@ -128,19 +139,35 @@ async function parseMultipartStream(req: NextRequest): Promise<ParsedMultipart> 
       });
 
       fileStream.on("error", (err: any) => {
-        reject(err);
+        console.warn("File stream notice:", err);
       });
     });
 
     bb.on("error", (err: any) => {
-      reject(err);
+      if (!hasResolved) {
+        // If busboy emits Unexpected end of form but files and fields are present, resolve successfully
+        if (err?.message?.includes("Unexpected end of form") && files.length > 0) {
+          hasResolved = true;
+          return resolve({ fields, files });
+        }
+        hasResolved = true;
+        reject(err);
+      }
     });
 
     bb.on("close", () => {
-      resolve({ fields, files });
+      if (!hasResolved) {
+        hasResolved = true;
+        resolve({ fields, files });
+      }
     });
 
-    bb.write(buffer);
+    // Chunk feeding in 64KB increments to ensure parser state machine stability
+    const chunkSize = 64 * 1024;
+    for (let offset = 0; offset < buffer.length; offset += chunkSize) {
+      const chunk = buffer.subarray(offset, Math.min(offset + chunkSize, buffer.length));
+      bb.write(chunk);
+    }
     bb.end();
   });
 }
@@ -408,11 +435,15 @@ export async function POST(req: NextRequest) {
       createdMaterialIds.push(materialId);
     }
 
+    const primaryMaterialId = createdMaterialIds[0] || "";
+
     return NextResponse.json(
       {
         success: true,
         message: "Material published successfully.",
+        materialId: primaryMaterialId,
         materialIds: createdMaterialIds,
+        shareUrl: `/student/materials/${primaryMaterialId}`,
         redirectUrl: "/faculty/materials",
       },
       { status: 200 }

@@ -79,11 +79,14 @@ export default async function MaterialDetailsPage(props: PageProps) {
     ? `← Back to ${material.subject}` 
     : "← Back to Subjects";
 
-  const studentSection = profile?.section || "A";
-  const studentBranch = profile?.branch || "CIC";
+  const studentSection = (profile?.section || "A").trim().toUpperCase();
+  const studentBranch = (profile?.branch || "CIC").trim().toUpperCase();
+  const materialBranch = (material?.branch || "").trim().toUpperCase();
+  const materialSection = (material?.section || "ALL").trim().toUpperCase();
+
   const hasAccess = isFaculty || isAdmin || (
-    material?.branch === studentBranch && 
-    (material?.section === studentSection || material?.section === "ALL" || !material?.section)
+    (!materialBranch || materialBranch === "ALL" || materialBranch === studentBranch) && 
+    (!materialSection || materialSection === "ALL" || materialSection === studentSection)
   );
 
   if (!material || material.state === "deleted" || (!isFaculty && !isAdmin && material.state !== "published") || !hasAccess) {

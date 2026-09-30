@@ -103,11 +103,14 @@ export async function uploadMaterialAction(formData: FormData) {
       fileBuffers.push({ file, buffer, ext });
     }
 
+    let firstMaterialId = "";
+
     // Insert Material records per target (branch, section) cohort
     for (const alloc of targetAllocations) {
       const branch = alloc.branch;
       const section = alloc.section || "ALL";
       const materialId = crypto.randomUUID();
+      if (!firstMaterialId) firstMaterialId = materialId;
 
       const { error: insertError } = await supabase
         .from("materials")
@@ -186,7 +189,11 @@ export async function uploadMaterialAction(formData: FormData) {
       // Ignore revalidate errors in background
     }
 
-    return { success: true, redirectUrl: "/faculty/materials" };
+    return { 
+      success: true, 
+      materialId: firstMaterialId,
+      redirectUrl: "/faculty/materials" 
+    };
   } catch (err: any) {
     console.error("Upload material action exception:", err);
     return { error: err?.message || "An unexpected error occurred during material upload." };

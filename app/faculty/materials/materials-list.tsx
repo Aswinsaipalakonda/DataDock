@@ -13,6 +13,7 @@ import AttachFileDialog from "./attach-file-dialog";
 import DeleteFileDialog from "./delete-file-dialog";
 import DeleteUnitDialog from "./delete-unit-dialog";
 import FilePreviewModal from "@/components/file-preview-modal";
+import MaterialShareModal from "@/components/material-share-modal";
 import { StudentEngagementLog } from "./page";
 import StudentCohortProgressMatrix, { RegisteredStudent } from "@/components/student-cohort-progress-matrix";
 import { 
@@ -50,7 +51,8 @@ import {
   Sparkles,
   FileCode2,
   CheckCircle2,
-  ListFilter
+  ListFilter,
+  Share2
 } from "lucide-react";
 import { formatSubjectTitle } from "@/lib/utils";
 
@@ -248,6 +250,15 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
   } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [downloadingRef, setDownloadingRef] = useState<string | null>(null);
+
+  // Sharing Dialog State
+  const [shareTarget, setShareTarget] = useState<{
+    materialId: string;
+    title: string;
+    subject?: string;
+    branch?: string;
+    semester?: number;
+  } | null>(null);
 
   // Cohort Matrix Drawer States
   const [isDrawerMounted, setIsDrawerMounted] = useState(false);
@@ -1504,6 +1515,23 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
                           </button>
                         )}
 
+                        {m.state === "published" && (
+                          <button
+                            onClick={() => setShareTarget({
+                              materialId: m.id,
+                              title: m.title,
+                              subject: m.subject,
+                              branch: m.branches && m.branches.length > 0 ? m.branches.join(", ") : (m.branch || "All Branches"),
+                              semester: m.semester || 3,
+                            })}
+                            className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200 flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                            title="Share material to WhatsApp / Copy Link"
+                          >
+                            <Share2 className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Share</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => openInspectModal(m)}
                           className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-full transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -1894,6 +1922,14 @@ export default function MaterialsList({ initialMaterials, subjects, students }: 
             </div>
           </div>
         </div>
+      )}
+      {/* Post-Upload & On-Demand WhatsApp / Link Share Modal */}
+      {shareTarget && (
+        <MaterialShareModal
+          isOpen={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          material={shareTarget}
+        />
       )}
     </div>
   );

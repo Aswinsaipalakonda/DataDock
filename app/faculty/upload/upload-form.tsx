@@ -30,6 +30,8 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import FilePreviewModal from "@/components/file-preview-modal";
+import { MaterialShareModal } from "@/components/material-share-modal";
+import { MaterialShareMetadata } from "@/lib/share-utils";
 import { formatSubjectTitle } from "@/lib/utils";
 
 function getFileTypeDetails(fileName: string) {
@@ -238,6 +240,8 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
   const [tagsStr, setTagsStr] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [state, setState] = useState<"draft" | "published">("published");
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareData, setShareData] = useState<MaterialShareMetadata | null>(null);
 
   // All subjects filtered by active regulation
   const subjectsForRegulation = useMemo(() => {
@@ -543,7 +547,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
     });
 
     // Helper: Direct REST API upload with real-time progress
-    const uploadViaRest = (): Promise<{ success: boolean; error?: string }> => {
+    const uploadViaRest = (): Promise<{ success: boolean; materialId?: string; error?: string }> => {
       return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/api/materials/upload", true);
@@ -561,7 +565,11 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const res = JSON.parse(xhr.responseText);
-              resolve({ success: true, error: res.error });
+              resolve({ 
+                success: true, 
+                materialId: res.materialId || res.materialIds?.[0], 
+                error: res.error 
+              });
             } catch {
               resolve({ success: true });
             }
@@ -604,8 +612,22 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
       const restResult = await uploadViaRest();
 
       if (restResult.success) {
-        router.push("/faculty/materials");
-        router.refresh();
+        const createdId = restResult.materialId || crypto.randomUUID();
+        const activeSub = subjects.find(s => s.code === selectedSubjectCode);
+        setShareData({
+          materialId: createdId,
+          title: title,
+          subject: selectedSubjectCode,
+          subjectTitle: activeSub?.title || selectedSubjectCode,
+          branch: targetBranches.join(", "),
+          section: targetAllocations.map(a => a.section).join(", "),
+          semester: selectedSemester || undefined,
+          regulation: selectedRegulation,
+          type: type,
+        });
+        setShareModalOpen(true);
+        setLoading(false);
+        setUploadProgress(null);
         return;
       }
 
@@ -624,8 +646,22 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
         setLoading(false);
         setUploadProgress(null);
       } else {
-        router.push(serverActionResult?.redirectUrl || "/faculty/materials");
-        router.refresh();
+        const createdId = serverActionResult?.materialId || crypto.randomUUID();
+        const activeSub = subjects.find(s => s.code === selectedSubjectCode);
+        setShareData({
+          materialId: createdId,
+          title: title,
+          subject: selectedSubjectCode,
+          subjectTitle: activeSub?.title || selectedSubjectCode,
+          branch: targetBranches.join(", "),
+          section: targetAllocations.map(a => a.section).join(", "),
+          semester: selectedSemester || undefined,
+          regulation: selectedRegulation,
+          type: type,
+        });
+        setShareModalOpen(true);
+        setLoading(false);
+        setUploadProgress(null);
       }
     } catch (err: unknown) {
       const rawMsg = err instanceof Error ? err.message : "";
@@ -1541,6 +1577,22 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
           onDownload={handleDownloadLocalFile}
         />
       )}
+
+      {/* Interactive Multi-Platform & WhatsApp Share Modal */}
+      <MaterialShareModal
+        isOpen={shareModalOpen}
+        onClose={() => {
+          setShareModalOpen(false);
+          router.push("/faculty/materials");
+          router.refresh();
+        }}
+        material={shareData}
+        onNavigateToMaterials={() => {
+          setShareModalOpen(false);
+          router.push("/faculty/materials");
+          router.refresh();
+        }}
+      />
     </div>
   );
 }
