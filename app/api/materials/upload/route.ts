@@ -37,47 +37,83 @@ function normalizeMaterialType(rawType: string): string {
   return "Other Resources";
 }
 
-interface ParsedMultipart {
-  fields: Record<string, string | string[]>;
-  files: Array<{
-    filename: string;
-    mimeType: string;
-    buffer: Buffer;
-    size: number;
-    ext: string;
-  }>;
+interface ParsedFile {
+  filename: string;
+  mimeType: string;
+  buffer: Buffer;
+  size: number;
+  ext: string;
 }
 
-// Ultra-resilient, deterministic multipart parser using single-read ArrayBuffer
-async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart> {
-  const contentType = req.headers.get("content-type") || "";
-  if (!contentType.includes("multipart/form-data")) {
-    throw new Error("Invalid Content-Type header. Expected multipart/form-data.");
-  }
+interface ParsedMultipart {
+  fields: Record<string, string | string[]>;
+  files: ParsedFile[];
+}
 
-  // Extract boundary from Content-Type header
-  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;,\s]+))/i);
-  if (!boundaryMatch) {
-    throw new Error("Missing multipart boundary delimiter in Content-Type header.");
-  }
-  const boundary = (boundaryMatch[1] || boundaryMatch[2]).trim().replace(/^["']|["']$/g, "");
+// 1. Busboy-powered robust parser
+function parseWithBusboy(buffer: Buffer, contentType: string): Promise<ParsedMultipart> {
+  return new Promise((resolve, reject) => {
+    const bb = busboy({
+      headers: { "content-type": contentType },
+      limits: {
+        fileSize: 150 * 1024 * 1024,
+        files: 20,
+      },
+    });
 
-  // Read the entire request body into memory once (no stream reuse errors)
-  const arrayBuffer = await req.arrayBuffer();
-  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-    throw new Error("Request body is empty.");
-  }
+    const fields: Record<string, string | string[]> = {};
+    const files: ParsedFile[] = [];
 
-  const buffer = Buffer.from(arrayBuffer);
+    bb.on("field", (name, val) => {
+      if (fields[name]) {
+        if (Array.isArray(fields[name])) {
+          (fields[name] as string[]).push(val);
+        } else {
+          fields[name] = [fields[name] as string, val];
+        }
+      } else {
+        fields[name] = val;
+      }
+    });
+
+    bb.on("file", (name, fileStream, info) => {
+      const { filename, mimeType } = info;
+      const chunks: Buffer[] = [];
+      fileStream.on("data", (chunk) => {
+        chunks.push(chunk);
+      });
+      fileStream.on("end", () => {
+        const fileBuf = Buffer.concat(chunks);
+        const finalName = filename || "uploaded_file.pdf";
+        const ext = "." + (finalName.split(".").pop()?.toLowerCase() || "pdf");
+        if (fileBuf.length > 0) {
+          files.push({
+            filename: finalName,
+            mimeType: mimeType || "application/octet-stream",
+            buffer: fileBuf,
+            size: fileBuf.length,
+            ext,
+          });
+        }
+      });
+    });
+
+    bb.on("close", () => {
+      resolve({ fields, files });
+    });
+
+    bb.on("error", (err) => {
+      reject(err);
+    });
+
+    bb.end(buffer);
+  });
+}
+
+// 2. Pure buffer fallback parser
+function parseBufferFallback(buffer: Buffer, boundary: string): ParsedMultipart {
   const fields: Record<string, string | string[]> = {};
-  const files: Array<{
-    filename: string;
-    mimeType: string;
-    buffer: Buffer;
-    size: number;
-    ext: string;
-  }> = [];
-
+  const files: ParsedFile[] = [];
   const boundaryBuffer = Buffer.from(`--${boundary}`);
 
   let pos = 0;
@@ -88,24 +124,20 @@ async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart>
     const bEnd = buffer.indexOf(boundaryBuffer, bStart + boundaryBuffer.length);
     if (bEnd === -1) break;
 
-    // Extract part slice
     let part = buffer.subarray(bStart + boundaryBuffer.length, bEnd);
 
-    // Skip leading \r\n or \n
     if (part.length >= 2 && part[0] === 0x0d && part[1] === 0x0a) {
       part = part.subarray(2);
     } else if (part.length >= 1 && (part[0] === 0x0a || part[0] === 0x0d)) {
       part = part.subarray(1);
     }
 
-    // Strip trailing \r\n or \n
     if (part.length >= 2 && part[part.length - 2] === 0x0d && part[part.length - 1] === 0x0a) {
       part = part.subarray(0, part.length - 2);
     } else if (part.length >= 1 && (part[part.length - 1] === 0x0a || part[part.length - 1] === 0x0d)) {
       part = part.subarray(0, part.length - 1);
     }
 
-    // Find header boundary (\r\n\r\n or \n\n or \r\r)
     let headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
     let headerOffset = 4;
     if (headerEnd === -1) {
@@ -121,7 +153,6 @@ async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart>
       const headerStr = part.subarray(0, headerEnd).toString("utf-8");
       const body = part.subarray(headerEnd + headerOffset);
 
-      // Flexible regex for field name, filename, content-type
       const nameMatch = headerStr.match(/name=(?:"([^"]*)"|'([^']*)'|([^;\r\n\s]+))/i);
       const filenameMatch = headerStr.match(/filename(?:\*=(?:UTF-8''|utf-8'')([^;\r\n\s]+)|=(?:"([^"]*)"|'([^']*)'|([^;\r\n\s]+)))/i);
       const typeMatch = headerStr.match(/Content-Type:\s*([^\r\n;]+)/i);
@@ -132,13 +163,12 @@ async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart>
         try {
           filename = decodeURIComponent(filename);
         } catch {
-          // Keep raw filename
+          // keep original
         }
       }
 
       const mimeType = typeMatch ? typeMatch[1].trim() : "application/octet-stream";
 
-      // If it has a filename, or is a file field or has binary content type
       if (filename || fieldName === "files" || fieldName === "files[]" || fieldName === "file" || fieldName === "document") {
         const finalName = filename || "uploaded_document.pdf";
         const ext = "." + (finalName.split(".").pop()?.toLowerCase() || "pdf");
@@ -169,6 +199,40 @@ async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart>
   }
 
   return { fields, files };
+}
+
+// Master Multipart Ingestion
+async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart> {
+  const contentType = req.headers.get("content-type") || "";
+  if (!contentType.includes("multipart/form-data")) {
+    throw new Error("Invalid Content-Type header. Expected multipart/form-data.");
+  }
+
+  // Read whole body once into memory buffer
+  const arrayBuffer = await req.arrayBuffer();
+  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+    throw new Error("Request body is empty.");
+  }
+  const buffer = Buffer.from(arrayBuffer);
+
+  // 1. Try Busboy parser first
+  try {
+    const result = await parseWithBusboy(buffer, contentType);
+    if (result.files.length > 0 || Object.keys(result.fields).length > 0) {
+      return result;
+    }
+  } catch (bbErr) {
+    console.warn("Busboy parsing notice, falling back to buffer parser:", bbErr);
+  }
+
+  // 2. Fallback to manual buffer parser
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;,\s]+))/i);
+  if (boundaryMatch) {
+    const boundary = (boundaryMatch[1] || boundaryMatch[2]).trim().replace(/^["']|["']$/g, "");
+    return parseBufferFallback(buffer, boundary);
+  }
+
+  throw new Error("Failed to parse multipart request payload.");
 }
 
 export async function POST(req: NextRequest) {
