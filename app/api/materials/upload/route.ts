@@ -48,127 +48,153 @@ interface ParsedMultipart {
   }>;
 }
 
-// Custom resilient stream parser using Busboy to handle multi-megabyte payloads without hitting buffer limits
-async function parseMultipartStream(req: NextRequest): Promise<ParsedMultipart> {
-  const contentType = req.headers.get("content-type") || "";
-  if (!contentType.includes("multipart/form-data")) {
-    throw new Error("Invalid Content-Type header. Expected multipart/form-data.");
-  }
+// Resilient multipart parser using native NextRequest Web Standard formData() with Busboy fallback
+async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart> {
+  const fields: Record<string, string | string[]> = {};
+  const files: Array<{
+    filename: string;
+    mimeType: string;
+    buffer: Buffer;
+    size: number;
+    ext: string;
+  }> = [];
 
-  // Sanitize contentType header (clean up boundary quotes if present)
-  let cleanContentType = contentType;
-  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
-  if (boundaryMatch) {
-    const rawBoundary = boundaryMatch[1] || boundaryMatch[2];
-    cleanContentType = `multipart/form-data; boundary=${rawBoundary.trim()}`;
-  }
-
-  const arrayBuffer = await req.arrayBuffer();
-  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-    throw new Error("Request body is empty.");
-  }
-
-  const buffer = Buffer.from(arrayBuffer);
-
-  return new Promise((resolve, reject) => {
-    let hasResolved = false;
-
-    const bb = busboy({
-      headers: { "content-type": cleanContentType },
-      limits: {
-        fileSize: 150 * 1024 * 1024, // 150 MB per file
-        files: 10,
-      },
-    });
-
-    const fields: Record<string, string | string[]> = {};
-    const files: Array<{
-      filename: string;
-      mimeType: string;
-      buffer: Buffer;
-      size: number;
-      ext: string;
-    }> = [];
-
-    bb.on("field", (name: string, val: string) => {
-      if (fields[name]) {
-        if (Array.isArray(fields[name])) {
-          (fields[name] as string[]).push(val);
-        } else {
-          fields[name] = [fields[name] as string, val];
-        }
-      } else {
-        fields[name] = val;
-      }
-    });
-
-    bb.on("file", (name: string, fileStream: any, info: any) => {
-      const { filename, mimeType } = info;
-      const chunks: Buffer[] = [];
-      let totalSize = 0;
-      let limitExceeded = false;
-
-      fileStream.on("data", (chunk: Buffer) => {
-        chunks.push(chunk);
-        totalSize += chunk.length;
-      });
-
-      fileStream.on("limit", () => {
-        limitExceeded = true;
-      });
-
-      fileStream.on("end", () => {
-        if (limitExceeded) {
-          if (!hasResolved) {
-            hasResolved = true;
-            return reject(
-              new Error(`File "${filename}" exceeds the maximum allowable upload limit of 150 MB.`)
-            );
+  // Primary: Native Web Standard req.formData() (Zero boundary EOF bugs, fast and streaming)
+  try {
+    const formData = await req.formData();
+    for (const [key, value] of formData.entries()) {
+      if (typeof value === "string") {
+        if (fields[key]) {
+          if (Array.isArray(fields[key])) {
+            (fields[key] as string[]).push(value);
+          } else {
+            fields[key] = [fields[key] as string, value];
           }
+        } else {
+          fields[key] = value;
         }
-        if (filename && totalSize > 0) {
-          const ext = "." + (filename.split(".").pop()?.toLowerCase() || "");
+      } else if (value && typeof value === "object" && "arrayBuffer" in value) {
+        const fileObj = value as File;
+        if (fileObj.size > 0 && fileObj.name && fileObj.name !== "undefined") {
+          const arrBuf = await fileObj.arrayBuffer();
+          const buffer = Buffer.from(arrBuf);
+          const ext = "." + (fileObj.name.split(".").pop()?.toLowerCase() || "");
           files.push({
-            filename,
-            mimeType: mimeType || "application/octet-stream",
-            buffer: Buffer.concat(chunks),
-            size: totalSize,
+            filename: fileObj.name,
+            mimeType: fileObj.type || "application/octet-stream",
+            buffer,
+            size: buffer.length,
             ext,
           });
         }
-      });
-
-      fileStream.on("error", (err: any) => {
-        console.warn("File stream notice:", err);
-      });
-    });
-
-    bb.on("error", (err: any) => {
-      if (!hasResolved) {
-        // If busboy emits Unexpected end of form but files and fields are present, resolve successfully
-        if (err?.message?.includes("Unexpected end of form") && files.length > 0) {
-          hasResolved = true;
-          return resolve({ fields, files });
-        }
-        hasResolved = true;
-        reject(err);
       }
-    });
-
-    bb.on("close", () => {
-      if (!hasResolved) {
-        hasResolved = true;
-        resolve({ fields, files });
-      }
-    });
-
-    // Chunk feeding in 64KB increments to ensure parser state machine stability
-    const chunkSize = 64 * 1024;
-    for (let offset = 0; offset < buffer.length; offset += chunkSize) {
-      const chunk = buffer.subarray(offset, Math.min(offset + chunkSize, buffer.length));
-      bb.write(chunk);
     }
-    bb.end();
+
+    if (files.length > 0 || Object.keys(fields).length > 0) {
+      return { fields, files };
+    }
+  } catch (nativeErr: any) {
+    console.warn("Native req.formData() notice, attempting stream fallback:", nativeErr?.message);
+  }
+
+  // Fallback: Busboy stream parser if req.formData() was bypassed or empty
+  return new Promise(async (resolve, reject) => {
+    try {
+      const contentType = req.headers.get("content-type") || "";
+      if (!contentType.includes("multipart/form-data")) {
+        return reject(new Error("Invalid Content-Type header. Expected multipart/form-data."));
+      }
+
+      const arrayBuffer = await req.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        return reject(new Error("Request body is empty."));
+      }
+
+      const buffer = Buffer.from(arrayBuffer);
+      let cleanContentType = contentType;
+      const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+      if (boundaryMatch) {
+        const rawBoundary = boundaryMatch[1] || boundaryMatch[2];
+        cleanContentType = `multipart/form-data; boundary=${rawBoundary.trim()}`;
+      }
+
+      let hasResolved = false;
+      const bb = busboy({
+        headers: { "content-type": cleanContentType },
+        limits: {
+          fileSize: 150 * 1024 * 1024,
+          files: 10,
+        },
+      });
+
+      const fallbackFields: Record<string, string | string[]> = {};
+      const fallbackFiles: Array<{
+        filename: string;
+        mimeType: string;
+        buffer: Buffer;
+        size: number;
+        ext: string;
+      }> = [];
+
+      bb.on("field", (name: string, val: string) => {
+        if (fallbackFields[name]) {
+          if (Array.isArray(fallbackFields[name])) {
+            (fallbackFields[name] as string[]).push(val);
+          } else {
+            fallbackFields[name] = [fallbackFields[name] as string, val];
+          }
+        } else {
+          fallbackFields[name] = val;
+        }
+      });
+
+      bb.on("file", (name: string, fileStream: any, info: any) => {
+        const { filename, mimeType } = info;
+        const chunks: Buffer[] = [];
+        let totalSize = 0;
+
+        fileStream.on("data", (chunk: Buffer) => {
+          chunks.push(chunk);
+          totalSize += chunk.length;
+        });
+
+        fileStream.on("end", () => {
+          if (filename && totalSize > 0) {
+            const ext = "." + (filename.split(".").pop()?.toLowerCase() || "");
+            fallbackFiles.push({
+              filename,
+              mimeType: mimeType || "application/octet-stream",
+              buffer: Buffer.concat(chunks),
+              size: totalSize,
+              ext,
+            });
+          }
+        });
+      });
+
+      bb.on("error", (err: any) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          if (fallbackFiles.length > 0) {
+            resolve({ fields: fallbackFields, files: fallbackFiles });
+          } else {
+            reject(err);
+          }
+        }
+      });
+
+      bb.on("close", () => {
+        if (!hasResolved) {
+          hasResolved = true;
+          resolve({ fields: fallbackFields, files: fallbackFiles });
+        }
+      });
+
+      bb.write(buffer);
+      bb.end();
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -224,12 +250,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Parse Multipart Stream via Busboy (handles 12MB+ files smoothly)
+    // 2. Parse Multipart Payload cleanly
     let parsed: ParsedMultipart;
     try {
-      parsed = await parseMultipartStream(req);
+      parsed = await parseMultipartPayload(req);
     } catch (parseErr: any) {
-      console.error("Multipart stream parse error:", parseErr);
+      console.error("Multipart parse error:", parseErr);
       return NextResponse.json(
         { error: parseErr?.message || "Failed to parse incoming upload payload." },
         { status: 400 }
