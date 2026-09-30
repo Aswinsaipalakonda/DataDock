@@ -56,11 +56,11 @@ async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart>
   }
 
   // Extract boundary from Content-Type header
-  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;,\s]+))/i);
   if (!boundaryMatch) {
     throw new Error("Missing multipart boundary delimiter in Content-Type header.");
   }
-  const boundary = (boundaryMatch[1] || boundaryMatch[2]).trim();
+  const boundary = (boundaryMatch[1] || boundaryMatch[2]).trim().replace(/^["']|["']$/g, "");
 
   // Read the entire request body into memory once (no stream reuse errors)
   const arrayBuffer = await req.arrayBuffer();
@@ -78,71 +78,94 @@ async function parseMultipartPayload(req: NextRequest): Promise<ParsedMultipart>
     ext: string;
   }> = [];
 
-  const boundaryDelimiter = Buffer.from(`--${boundary}`);
-  const headerEndDelimiter = Buffer.from(`\r\n\r\n`);
+  const boundaryBuffer = Buffer.from(`--${boundary}`);
 
-  let currentPos = 0;
+  let pos = 0;
+  while (pos < buffer.length) {
+    const bStart = buffer.indexOf(boundaryBuffer, pos);
+    if (bStart === -1) break;
 
-  while (currentPos < buffer.length) {
-    const boundaryIndex = buffer.indexOf(boundaryDelimiter, currentPos);
-    if (boundaryIndex === -1) break;
+    const bEnd = buffer.indexOf(boundaryBuffer, bStart + boundaryBuffer.length);
+    if (bEnd === -1) break;
 
-    const nextBoundaryIndex = buffer.indexOf(boundaryDelimiter, boundaryIndex + boundaryDelimiter.length);
-    if (nextBoundaryIndex === -1) break;
+    // Extract part slice
+    let part = buffer.subarray(bStart + boundaryBuffer.length, bEnd);
 
-    let partStart = boundaryIndex + boundaryDelimiter.length;
-    // Skip optional \r\n after boundary
-    if (buffer[partStart] === 0x0d && buffer[partStart + 1] === 0x0a) {
-      partStart += 2;
+    // Skip leading \r\n or \n
+    if (part.length >= 2 && part[0] === 0x0d && part[1] === 0x0a) {
+      part = part.subarray(2);
+    } else if (part.length >= 1 && (part[0] === 0x0a || part[0] === 0x0d)) {
+      part = part.subarray(1);
     }
 
-    let partEnd = nextBoundaryIndex;
-    // Strip trailing \r\n before the next boundary
-    if (partEnd >= 2 && buffer[partEnd - 2] === 0x0d && buffer[partEnd - 1] === 0x0a) {
-      partEnd -= 2;
+    // Strip trailing \r\n or \n
+    if (part.length >= 2 && part[part.length - 2] === 0x0d && part[part.length - 1] === 0x0a) {
+      part = part.subarray(0, part.length - 2);
+    } else if (part.length >= 1 && (part[part.length - 1] === 0x0a || part[part.length - 1] === 0x0d)) {
+      part = part.subarray(0, part.length - 1);
     }
 
-    if (partStart < partEnd) {
-      const partBuffer = buffer.subarray(partStart, partEnd);
-      const headerEndIndex = partBuffer.indexOf(headerEndDelimiter);
+    // Find header boundary (\r\n\r\n or \n\n or \r\r)
+    let headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
+    let headerOffset = 4;
+    if (headerEnd === -1) {
+      headerEnd = part.indexOf(Buffer.from("\n\n"));
+      headerOffset = 2;
+    }
+    if (headerEnd === -1) {
+      headerEnd = part.indexOf(Buffer.from("\r\r"));
+      headerOffset = 2;
+    }
 
-      if (headerEndIndex !== -1) {
-        const headerStr = partBuffer.subarray(0, headerEndIndex).toString("utf-8");
-        const bodyBuffer = partBuffer.subarray(headerEndIndex + 4);
+    if (headerEnd !== -1) {
+      const headerStr = part.subarray(0, headerEnd).toString("utf-8");
+      const body = part.subarray(headerEnd + headerOffset);
 
-        const nameMatch = headerStr.match(/name="([^"]*)"/i);
-        const filenameMatch = headerStr.match(/filename="([^"]*)"/i);
-        const typeMatch = headerStr.match(/Content-Type:\s*([^\r\n;]+)/i);
+      // Flexible regex for field name, filename, content-type
+      const nameMatch = headerStr.match(/name=(?:"([^"]*)"|'([^']*)'|([^;\r\n\s]+))/i);
+      const filenameMatch = headerStr.match(/filename(?:\*=(?:UTF-8''|utf-8'')([^;\r\n\s]+)|=(?:"([^"]*)"|'([^']*)'|([^;\r\n\s]+)))/i);
+      const typeMatch = headerStr.match(/Content-Type:\s*([^\r\n;]+)/i);
 
-        const fieldName = nameMatch ? nameMatch[1] : "";
-        const filename = filenameMatch ? filenameMatch[1] : "";
-        const mimeType = typeMatch ? typeMatch[1].trim() : "application/octet-stream";
+      const fieldName = nameMatch ? (nameMatch[1] || nameMatch[2] || nameMatch[3] || "").trim() : "";
+      let filename = filenameMatch ? (filenameMatch[2] || filenameMatch[3] || filenameMatch[4] || filenameMatch[1] || "").trim() : "";
+      if (filename) {
+        try {
+          filename = decodeURIComponent(filename);
+        } catch {
+          // Keep raw filename
+        }
+      }
 
-        if (filename && bodyBuffer.length > 0) {
-          const ext = "." + (filename.split(".").pop()?.toLowerCase() || "");
+      const mimeType = typeMatch ? typeMatch[1].trim() : "application/octet-stream";
+
+      // If it has a filename, or is a file field or has binary content type
+      if (filename || fieldName === "files" || fieldName === "files[]" || fieldName === "file" || fieldName === "document") {
+        const finalName = filename || "uploaded_document.pdf";
+        const ext = "." + (finalName.split(".").pop()?.toLowerCase() || "pdf");
+        if (body.length > 0) {
           files.push({
-            filename,
+            filename: finalName,
             mimeType,
-            buffer: bodyBuffer,
-            size: bodyBuffer.length,
+            buffer: body,
+            size: body.length,
             ext,
           });
-        } else if (fieldName) {
-          const val = bodyBuffer.toString("utf-8");
-          if (fields[fieldName]) {
-            if (Array.isArray(fields[fieldName])) {
-              (fields[fieldName] as string[]).push(val);
-            } else {
-              fields[fieldName] = [fields[fieldName] as string, val];
-            }
+        }
+      } else if (fieldName) {
+        const val = body.toString("utf-8");
+        if (fields[fieldName]) {
+          if (Array.isArray(fields[fieldName])) {
+            (fields[fieldName] as string[]).push(val);
           } else {
-            fields[fieldName] = val;
+            fields[fieldName] = [fields[fieldName] as string, val];
           }
+        } else {
+          fields[fieldName] = val;
         }
       }
     }
 
-    currentPos = nextBoundaryIndex;
+    pos = bEnd;
   }
 
   return { fields, files };
