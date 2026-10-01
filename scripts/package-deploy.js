@@ -24,7 +24,10 @@ const excludeList = new Set([
   'brag-output',
   'backups',
   '.agents',
+  '.env',
   '.env.local',
+  'scratch',
+  'DLD UNIT-1.pdf',
   'tsconfig.tsbuildinfo',
   '.DS_Store',
 ]);

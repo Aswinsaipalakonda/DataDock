@@ -134,7 +134,7 @@ On Linux/Hostinger servers, the build user needs read and execute permissions ac
 - **Fix**:
   1. In `public_html/.htaccess`, add the directive:
      ```apache
-     LimitRequestBody 157286400
+     LimitRequestBody 550000000
      ```
   2. Ensure directory permissions on the uploads folder:
      ```bash
