@@ -431,7 +431,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
       ".zip", ".rar", ".7z", ".tar", ".gz",
       ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"
     ];
-    const maxFileSize = 150 * 1024 * 1024; // 150 MB
+    const maxFileSize = 500 * 1024 * 1024; // 500 MB
 
     const validNewFiles: File[] = [];
     for (const f of incomingFiles) {
@@ -441,7 +441,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
         return;
       }
       if (f.size > maxFileSize) {
-        setError(`File "${f.name}" exceeds 150 MB limit.`);
+        setError(`File "${f.name}" exceeds 500 MB limit.`);
         return;
       }
       validNewFiles.push(f);
@@ -576,7 +576,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
           } else if (xhr.status === 413) {
             resolve({
               success: false,
-              error: "The files exceed the server upload limit (150 MB). Please try with smaller files or fewer files at once.",
+              error: "The files exceed the server upload limit (500 MB). Please try with smaller files or fewer files at once.",
             });
           } else if (xhr.status === 401 || xhr.status === 403) {
             resolve({
@@ -1362,7 +1362,7 @@ export default function UploadForm({ regulations, subjects, branches = [], dynam
                   Click to select or drag and drop study materials
                 </p>
                 <p className="text-[11px] sm:text-xs text-slate-500 font-normal">
-                  Supported: <span className="font-semibold text-slate-700">PDF, PowerPoint, Excel, Coding files, Word, ZIP, Images</span> (Up to 150MB each)
+                  Supported: <span className="font-semibold text-slate-700">PDF, PowerPoint, Excel, Coding files, Word, ZIP, Images</span> (Up to 500MB each)
                 </p>
               </div>
             </div>

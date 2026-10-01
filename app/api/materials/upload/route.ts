@@ -56,7 +56,7 @@ function parseWithBusboy(buffer: Buffer, contentType: string): Promise<ParsedMul
     const bb = busboy({
       headers: { "content-type": contentType },
       limits: {
-        fileSize: 150 * 1024 * 1024,
+        fileSize: 500 * 1024 * 1024,
         files: 20,
       },
     });

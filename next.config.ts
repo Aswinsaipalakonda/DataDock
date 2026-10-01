@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: {
-      bodySizeLimit: "150mb",
+      bodySizeLimit: "500mb",
     },
   },
   async headers() {

@@ -81,7 +81,7 @@ export async function uploadMaterialAction(formData: FormData) {
       return { error: "At least one valid file is required to create a material." };
     }
 
-    const maxFileSize = 150 * 1024 * 1024; // 150 MB
+    const maxFileSize = 500 * 1024 * 1024; // 500 MB
 
     for (const file of validFiles) {
       const ext = "." + file.name.split(".").pop()?.toLowerCase();
@@ -91,7 +91,7 @@ export async function uploadMaterialAction(formData: FormData) {
         };
       }
       if (file.size > maxFileSize) {
-        return { error: `File "${file.name}" exceeds the maximum limit of 150 MB.` };
+        return { error: `File "${file.name}" exceeds the maximum limit of 500 MB.` };
       }
     }
 

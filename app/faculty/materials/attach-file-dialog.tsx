@@ -33,14 +33,14 @@ export default function AttachFileDialog({
 
   const handleFile = (selectedFile: File) => {
     const ext = "." + selectedFile.name.split(".").pop()?.toLowerCase();
-    const maxFileSize = 150 * 1024 * 1024; // 150MB
+    const maxFileSize = 500 * 1024 * 1024; // 500MB
 
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
       setError(`File format "${ext}" is unsupported. Allowed: PDF, PPT, Word, Excel, Code, ZIP, TXT, and Images.`);
       return;
     }
     if (selectedFile.size > maxFileSize) {
-      setError("File exceeds maximum allowed size of 150MB.");
+      setError("File exceeds maximum allowed size of 500MB.");
       return;
     }
 
@@ -90,7 +90,7 @@ export default function AttachFileDialog({
     } catch (err: unknown) {
       const rawMsg = err instanceof Error ? err.message : "";
       if (rawMsg.includes("441") || rawMsg.includes("Minified React error")) {
-        setError("Failed to upload file to the server. The file may exceed the 150MB server upload limit or the connection timed out.");
+        setError("Failed to upload file to the server. The file may exceed the 500MB server upload limit or the connection timed out.");
       } else {
         setError(rawMsg || "An unexpected error occurred while attaching the file.");
       }
@@ -176,7 +176,7 @@ export default function AttachFileDialog({
                   Select or drag & drop study file
                 </p>
                 <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed">
-                  PDF, PowerPoint, Excel, Coding files (.py/.java/.c/etc.), ZIP, TXT, or Images (up to 150MB)
+                  PDF, PowerPoint, Excel, Coding files (.py/.java/.c/etc.), ZIP, TXT, or Images (up to 500MB)
                 </p>
               </div>
             )}
